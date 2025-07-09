@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+
+{% block title %}Bandeja Pronóstico{% endblock %}
+{% block page_header %} Bandeja Pronóstico{% endblock %}
+
+{% block content %}
+<div class="content-section mb-4">
+    <h4 class="mb-3"><i class="fas fa-filter mr-2"></i>Filtrar Registros</h4>
+    <form method="GET" action="{{ url_for('bandeja') }}" data-no-spinner="true">
+        <div class="form-row">
+            <div class="form-group col-md-3">
+                <label for="fecha_inicio">Desde:</label>
+                <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}">
+            </div>
+            <div class="form-group col-md-3">
+                <label for="fecha_fin">Hasta:</label>
+                <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}">
+            </div>
+            <div class="form-group col-md-2">
+                <label for="grupo">Grupo:</label>
+                <select id="grupo" name="grupo" class="form-control">
+                    <option value="Todos" {% if not filtros.get('grupo') or filtros.get('grupo') == 'Todos' %}selected{% endif %}>Todos</option>
+                    <option value="IHP" {% if filtros.get('grupo') == 'IHP' %}selected{% endif %}>IHP</option>
+                    <option value="FHP" {% if filtros.get('grupo') == 'FHP' %}selected{% endif %}>FHP</option>
+                </select>
+            </div>
+            <div class="form-group col-md-2">
+                <label for="status">Estado:</label>
+                <select id="status" name="status" class="form-control">
+                    <option value="Todos" {% if not filtros.get('status') or filtros.get('status') == 'Todos' %}selected{% endif %}>Todos</option>
+                    <option value="Nuevo" {% if filtros.get('status') == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                    <option value="En Revisión" {% if filtros.get('status') == 'En Revisión' %}selected{% endif %}>En Revisión</option>
+                    <option value="Resuelto" {% if filtros.get('status') == 'Resuelto' %}selected{% endif %}>Resuelto</option>
+                </select>
+            </div>
+             <div class="form-group col-md-2">
+                <label for="area">Área:</label>
+                <input type="text" class="form-control" id="area" name="area" placeholder="Buscar..." value="{{ filtros.get('area', '') }}">
+            </div>
+        </div>
+        <div class="form-row align-items-end">
+            <div class="form-group col-md-12 text-right">
+                <a href="{{ url_for('bandeja', limpiar=1) }}" class="btn btn-secondary">Limpiar Filtros</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search mr-1"></i> Filtrar</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="content-section">
+    {% if razones %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Grupo</th>
+                        <th>Área</th>
+                        <th>Turno</th>
+                        <th>Pronóstico</th>
+                        <th>Producido</th>
+                        <th>Desviación</th>
+                        <th style="width: 30%;">Razón</th>
+                        <th>Enviado por</th>
+                        <th style="width: 15%;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for razon in razones %}
+                    {% set desviacion = razon.producido_turno - (razon.valor_pronostico or 0) %}
+                    <tr class="status-{{ razon.status | lower | replace(' ', '-') }}">
+                        <td>{{ razon.fecha.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if razon.grupo == 'IHP' %}<span class="badge badge-role-ihp">{{ razon.grupo }}</span>
+                            {% elif razon.grupo == 'FHP' %}<span class="badge badge-role-fhp">{{ razon.grupo }}</span>
+                            {% else %}<span class="badge badge-secondary">{{ razon.grupo }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ razon.area }}</td>
+                        <td>{{ razon.turno }}</td>
+                        <td class="text-center">{{ razon.valor_pronostico or 0 }}</td>
+                        <td class="text-center">{{ razon.producido_turno }}</td>
+                        <td class="text-center font-weight-bold {% if desviacion < 0 %}text-danger{% elif desviacion > 0 %}text-success{% endif %}">
+                            {{ "{:+}".format(desviacion) }}
+                        </td>
+                        <td style="white-space: pre-wrap; word-break: break-word;">{{ razon.razon_desviacion }}</td>
+                        <td><span class="badge badge-info">{{ razon.usuario_razon }}</span></td>
+                        <td>
+                            <form action="{{ url_for('update_reason_status', reason_id=razon.id) }}" method="POST" data-no-spinner="true">
+                                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                <div class="input-group">
+                                    <select name="status" class="custom-select custom-select-sm" onchange="this.form.submit()">
+                                        <option value="Nuevo" {% if razon.status == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                                        <option value="En Revisión" {% if razon.status == 'En Revisión' %}selected{% endif %}>En Revisión</option>
+                                        <option value="Resuelto" {% if razon.status == 'Resuelto' %}selected{% endif %}>Resuelto</option>
+                                    </select>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-warning text-center">
+            <h4 class="alert-heading">Sin Resultados</h4>
+            <p class="mb-0">No se encontraron registros que coincidan con los filtros de búsqueda aplicados.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
