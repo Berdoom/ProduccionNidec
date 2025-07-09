@@ -1,5 +1,4 @@
 import os
-import sys
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
@@ -10,16 +9,9 @@ from datetime import datetime
 load_dotenv()
 
 # --- Configuración de la Base de Datos ---
-# Obtener la ruta absoluta del directorio del proyecto
 basedir = os.path.abspath(os.path.dirname(__file__))
-
-# Crear una URL por defecto para SQLite que sea relativa al proyecto
 default_sqlite_url = f"sqlite:///{os.path.join(basedir, 'produccion.db')}"
-
-# Usar la DATABASE_URL del .env si existe, si no, usar la URL de SQLite por defecto.
 DATABASE_URL = os.getenv("DATABASE_URL") or default_sqlite_url
-
-# Pequeña corrección para compatibilidad con Heroku/PostgreSQL
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -49,7 +41,7 @@ class Pronostico(Base):
     __tablename__ = 'pronosticos'
     id = Column(Integer, primary_key=True)
     fecha = Column(Date, nullable=False, index=True)
-    grupo = Column(String(10), nullable=False, index=True) # IHP o FHP
+    grupo = Column(String(10), nullable=False, index=True)
     area = Column(String(50), nullable=False)
     turno = Column(String(20), nullable=False)
     valor_pronostico = Column(Integer)
@@ -63,7 +55,7 @@ class ProduccionCaptura(Base):
     __tablename__ = 'produccion_capturas'
     id = Column(Integer, primary_key=True)
     fecha = Column(Date, nullable=False, index=True)
-    grupo = Column(String(10), nullable=False, index=True) # IHP o FHP
+    grupo = Column(String(10), nullable=False, index=True)
     area = Column(String(50), nullable=False)
     hora = Column(String(10), nullable=False)
     valor_producido = Column(Integer)
@@ -85,7 +77,7 @@ class OutputData(Base):
     __tablename__ = 'output_data'
     id = Column(Integer, primary_key=True)
     fecha = Column(Date, nullable=False, index=True)
-    grupo = Column(String(10), nullable=False, index=True) # IHP o FHP
+    grupo = Column(String(10), nullable=False, index=True)
     pronostico = Column(Integer)
     output = Column(Integer)
     usuario_captura = Column(String(80))
@@ -111,35 +103,24 @@ def create_default_admin():
     else:
         print("Ya existe al menos un usuario administrador.")
 
-def reset_database():
-    """
-    ¡ACCIÓN DESTRUCTIVA! Borra todas las tablas y las vuelve a crear.
-    También crea un usuario administrador por defecto.
-    """
-    confirm = input("ADVERTENCIA: Estás a punto de borrar TODOS los datos de la base de datos. \n"
-                    "Esta acción es irreversible. \n"
-                    "Escribe 'BORRAR' para confirmar: ")
-    if confirm == 'BORRAR':
-        print("Borrando todas las tablas...")
-        Base.metadata.drop_all(bind=engine)
-        print("Tablas borradas.")
-        init_db()
-        create_default_admin()
-        print("¡Base de datos reiniciada exitosamente!")
-    else:
-        print("Reinicio cancelado.")
+# --- SCRIPT DE EJECUCIÓN DIRECTA ---
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        if command == 'init':
-            init_db()
-        elif command == 'reset':
-            reset_database()
-        elif command == 'add-admin':
-            create_default_admin()
-        else:
-            print(f"Comando desconocido: {command}")
-            print("Comandos disponibles: init, reset, add-admin")
-    else:
-        print("Por favor, especifica un comando: init, reset, o add-admin")
+    """
+    Este bloque se ejecuta cuando corres el archivo directamente desde la terminal
+    usando el comando: python database.py
+    
+    Su propósito es crear la base de datos y el usuario admin inicial.
+    """
+    print("\nIniciando la configuración de la base de datos...")
+    
+    # 1. Crea las tablas
+    init_db()
+    
+    # 2. Crea el usuario administrador por defecto
+    create_default_admin()
+
+    # Cierra la sesión de la base de datos para liberar la conexión
+    db_session.remove()
+    
+    print("\nConfiguración finalizada. Puedes iniciar la aplicación Flask.")
