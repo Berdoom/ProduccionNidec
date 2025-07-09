@@ -12,7 +12,7 @@ import calendar
 
 # --- Importaciones de la Base de Datos ---
 from sqlalchemy import func, exc, extract
-from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData
+from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, init_db, create_default_admin
 
 # --- Configurar locale para español (para nombres de meses y días) ---
 try:
@@ -25,6 +25,14 @@ except locale.Error:
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "una-clave-secreta-de-respaldo-muy-segura")
+
+# --- INICIALIZACIÓN DE LA BASE DE DATOS ---
+# Este bloque se asegura de que las tablas y el usuario admin por defecto existan
+# cuando la aplicación se inicia. Es seguro ejecutarlo múltiples veces.
+with app.app_context():
+    init_db()
+    create_default_admin()
+# --- FIN DE INICIALIZACIÓN DE LA BASE DE DATOS ---
 
 # Configuración del tiempo de expiración de la sesión por inactividad
 app.permanent_session_lifetime = timedelta(minutes=30)

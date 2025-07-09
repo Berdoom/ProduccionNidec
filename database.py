@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
+from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 
@@ -87,19 +88,26 @@ class OutputData(Base):
 
 def init_db():
     """Crea todas las tablas si no existen."""
-    print("Creando todas las tablas en la base de datos...")
+    print("Verificando y creando tablas si no existen...")
     Base.metadata.create_all(bind=engine)
-    print("Tablas creadas exitosamente.")
+    print("Verificación de tablas completada.")
 
 def create_default_admin():
-    """Crea un usuario administrador por defecto si no existe ninguno."""
+    """Crea un usuario administrador por defecto si no existe ninguno. Es seguro de llamar en entornos con múltiples workers."""
     admin_user = db_session.query(Usuario).filter_by(role='ADMIN').first()
     if not admin_user:
         print("No se encontraron usuarios ADMIN. Creando usuario por defecto...")
         default_admin = Usuario(username='admin', password='admin', role='ADMIN')
         db_session.add(default_admin)
-        db_session.commit()
-        print("Usuario 'admin' con contraseña 'admin' creado exitosamente.")
+        try:
+            db_session.commit()
+            print("Usuario 'admin' con contraseña 'admin' creado exitosamente.")
+        except IntegrityError:
+            db_session.rollback()
+            print("El usuario 'admin' ya fue creado por otro proceso. Se ignora la creación.")
+        except Exception as e:
+            db_session.rollback()
+            print(f"Ocurrió un error inesperado al crear el usuario admin: {e}")
     else:
         print("Ya existe al menos un usuario administrador.")
 
