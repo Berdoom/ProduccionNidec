@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+
+{% block title %}Resumen de Producción{% endblock %}
+{% block page_header %}Resumen de Producción{% endblock %}
+
+{% block content %}
+
+<div class="content-section d-flex justify-content-between align-items-center">
+    <div>
+        <h4 class="mb-0">Resúmenes de Producción (Anual, Mensual, Semanal)</h4>
+        <small class="text-muted">Última actualización de datos: <strong>{{ last_update }}</strong></small>
+    </div>
+    <form action="{{ url_for('update_summary_data') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <button type="submit" class="btn btn-success" onclick="this.disabled=true; this.innerHTML='<span class=\'spinner-border spinner-border-sm\'></span> Actualizando...'; this.form.submit();">
+            <i class="fas fa-sync-alt mr-2"></i>Actualizar Datos del Resumen
+        </button>
+    </form>
+</div>
+
+<div class="content-section">
+    <ul class="nav nav-tabs" id="summaryTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <a class="nav-link active" id="yearly-tab" data-toggle="tab" href="#yearly" role="tab" aria-controls="yearly" aria-selected="true">Anual</a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link" id="monthly-tab" data-toggle="tab" href="#monthly" role="tab" aria-controls="monthly" aria-selected="false">Mensual</a>
+        </li>
+        <li class="nav-item" role="presentation">
+            <a class="nav-link" id="weekly-tab" data-toggle="tab" href="#weekly" role="tab" aria-controls="weekly" aria-selected="false">Semanal</a>
+        </li>
+    </ul>
+    <div class="tab-content" id="summaryTabContent">
+        <!-- Pestaña Anual -->
+        <div class="tab-pane fade show active" id="yearly" role="tabpanel" aria-labelledby="yearly-tab">
+            {% include 'partials/_summary_table.html' with context %}
+        </div>
+        <!-- Pestaña Mensual -->
+        <div class="tab-pane fade" id="monthly" role="tabpanel" aria-labelledby="monthly-tab">
+            {% with summary_list=summary_data.monthly, period_name='Mes' %}
+                {% include 'partials/_summary_table.html' %}
+            {% endwith %}
+        </div>
+        <!-- Pestaña Semanal -->
+        <div class="tab-pane fade" id="weekly" role="tabpanel" aria-labelledby="weekly-tab">
+             {% with summary_list=summary_data.weekly, period_name='Semana' %}
+                {% include 'partials/_summary_table.html' %}
+            {% endwith %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Pequeño script para manejar el estado activo de las pestañas
+    $(document).ready(function(){
+        $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+            localStorage.setItem('lastTab', $(e.target).attr('href'));
+        });
+        var lastTab = localStorage.getItem('lastTab');
+        if (lastTab) {
+            $('[href="' + lastTab + '"]').tab('show');
+        }
+    });
+</script>
+{% endblock %}

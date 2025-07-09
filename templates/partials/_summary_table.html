@@ -1,0 +1,45 @@
+{% set summary_list = summary_data.yearly if summary_list is not defined else summary_list %}
+{% set period_name = 'Año' if period_name is not defined else period_name %}
+
+<div class="table-responsive mt-4">
+    <table class="table table-striped table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>{{ period_name }}</th>
+                <th>Grupo</th>
+                <th>Pronóstico Total</th>
+                <th>Producción Total</th>
+                <th style="width: 20%;">Eficiencia</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for summary in summary_list %}
+            <tr>
+                <td><strong>{{ summary.period }}</strong></td>
+                <td>
+                    {% if summary.group_name == 'IHP' %}
+                        <span class="badge badge-role-ihp">{{ summary.group_name }}</span>
+                    {% elif summary.group_name == 'FHP' %}
+                        <span class="badge badge-role-fhp">{{ summary.group_name }}</span>
+                    {% else %}
+                        <span class="badge badge-secondary">{{ summary.group_name }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ "{:,.0f}".format(summary.total_pronostico) }}</td>
+                <td>{{ "{:,.0f}".format(summary.total_producido) }}</td>
+                <td>
+                    <div class="progress" style="height: 20px;">
+                        <div class="progress-bar {% if summary.eficiencia < 80 %}bg-danger{% elif summary.eficiencia < 95 %}bg-warning{% else %}bg-success{% endif %}" role="progressbar" style="width: {{ summary.eficiencia }}%;" aria-valuenow="{{ summary.eficiencia }}" aria-valuemin="0" aria-valuemax="100">
+                            <strong>{{ summary.eficiencia }}%</strong>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">No hay datos de resumen disponibles. Por favor, actualiza los datos.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

@@ -1,0 +1,9 @@
+Flask
+SQLAlchemy
+pandas
+openpyxl
+XlsxWriter
+gunicorn
+psycopg2-binary
+python-dotenv
+werkzeug

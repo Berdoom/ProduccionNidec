@@ -1,0 +1,30 @@
+<!-- templates/login.html -->
+{% extends "layout.html" %}
+
+{% block title %}Nidec - Inicio de Sesión{% endblock %}
+
+{% block content %}
+<div class="login-page-container">
+    <div class="login-form-container">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Nidec" class="logo">
+        <h2>Control de Producción</h2>
+
+        <form action="{{ url_for('login') }}" method="POST" class="w-100 text-left">
+            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+            <div class="form-group">
+                <label for="username" class="font-weight-bold">Usuario:</label>
+                <input type="text" class="form-control" id="username" name="username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password" class="font-weight-bold">Contraseña:</label>
+                <input type="password" class="form-control" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-nidec btn-block mt-4">Entrar</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+
+
+

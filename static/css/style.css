@@ -1,0 +1,237 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+    /* Paleta de Verdes Principal */
+    --nidec-green: #24b817;
+    --nidec-green-dark: #1c8c11;
+    --nidec-green-light: #e9f8e8;
+
+    /* Colores base */
+    --background-grey: #f4f7f6;
+    --white: #ffffff;
+    --text-dark: #212529;
+    --text-muted: #6c757d;
+}
+
+body {
+    background-color: var(--background-grey);
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-dark);
+}
+
+.header {
+    background-color: var(--white);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.nidec-navbar {
+    background-color: var(--nidec-green);
+    border-bottom: 3px solid var(--nidec-green-dark);
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+}
+
+.navbar-dark .navbar-nav .nav-item.active .nav-link,
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .show > .nav-link {
+    color: var(--white);
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+.content-section {
+    background-color: var(--white);
+    padding: 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+    margin-bottom: 25px;
+}
+
+/* --- ESTILOS DE BOTONES UNIFICADOS CON VERDE --- */
+.btn-nidec-style {
+    background-color: var(--nidec-green);
+    border-color: var(--nidec-green);
+    color: white !important;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+.btn-nidec-style:hover {
+    background-color: var(--nidec-green-dark);
+    border-color: var(--nidec-green-dark);
+    color: white;
+}
+.btn-nidec-style .fas {
+    margin-right: 0.5rem;
+}
+
+/* --- Login --- */
+.login-page-container { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+.login-form-container { max-width: 450px; width: 100%; background: var(--white); padding: 3rem; border-radius: 12px; border-top: 5px solid var(--nidec-green); box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
+.login-form-container .logo { max-width: 70%; margin-bottom: 1.5rem; }
+.login-form-container h2 { font-weight: 600; margin-bottom: 2rem; }
+.login-form-container .form-control:focus { border-color: var(--nidec-green); box-shadow: 0 0 0 0.2rem rgba(36, 184, 23, 0.25); }
+.btn-nidec { background-color: var(--nidec-green); border-color: var(--nidec-green); color: var(--white) !important; font-weight: 600; transition: all 0.2s ease; padding: 0.75rem; border-radius: 8px; }
+.btn-nidec:hover { background-color: var(--nidec-green-dark); border-color: var(--nidec-green-dark); }
+
+/* --- Insignias de Rol --- */
+.badge-role-admin { background-color: var(--nidec-green-dark); color: white; }
+.badge-role-ihp, .badge-role-fhp { background-color: var(--nidec-green); color: white; }
+
+/* --- Estilos de Tabla de Captura --- */
+.production-table input[type="number"]:focus { border-color: var(--nidec-green); box-shadow: 0 0 0 3px rgba(36, 184, 23, 0.25); }
+.pronostico-turno-input { background-color: var(--nidec-green-light); border: 1px solid var(--nidec-green); font-weight: 700; color: var(--nidec-green-dark); }
+.turno-total-cell { background-color: #f1f3f5; }
+.shortfall-cell { background-color: #ffeeba !important; color: #856404 !important; font-weight: bold; }
+.badge-success-reason { background-color: var(--nidec-green); color: white; padding: .3em .5em; border-radius: 6px; font-size: 0.75rem; }
+
+/* --- Estilos para el Ícono de Razón --- */
+.reason-icon-container {
+    display: inline-block;
+    margin-left: 8px;
+    font-size: 1.1rem;
+    vertical-align: middle;
+}
+
+.reason-icon-active {
+    cursor: pointer;
+}
+
+/* --- Estilos para la Fila de Razón en Bandeja --- */
+tr.status-en-revisión {
+    background-color: #fff3cd !important;
+}
+tr.status-resuelto {
+    background-color: #d4edda !important;
+}
+tr.status-resuelto td {
+    color: #6c757d;
+    text-decoration: line-through;
+}
+tr.status-resuelto .badge,
+tr.status-resuelto .custom-select {
+    opacity: 0.65;
+}
+
+/* --- Estilos para Notificaciones (Toasts) --- */
+.toast-container {
+    position: fixed;
+    top: 90px;
+    right: 20px;
+    z-index: 1055;
+}
+
+/* =================================================================
+   ESTILOS PARA ACORDEÓN RESPONSIVE (CELULAR) 
+================================================================= */
+.accordion-responsive {
+    display: none;
+}
+
+@media (max-width: 992px) {
+    .table-responsive.desktop-only {
+        display: none;
+    }
+    .accordion-responsive {
+        display: block;
+    }
+    .accordion-responsive .card,
+    #registroAccordion .card {
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+    }
+    .accordion-responsive .card-header,
+    #registroAccordion .card-header {
+        background-color: var(--nidec-green-light);
+        padding: 0;
+        border-bottom: 1px solid #ddd;
+    }
+    .accordion-responsive .card-header button,
+    #registroAccordion .card-header button {
+        color: var(--nidec-green-dark);
+        font-weight: 600;
+        font-size: 1.1rem;
+        width: 100%;
+        text-align: left;
+        padding: 1rem;
+        text-decoration: none;
+        border: none;
+        background: transparent;
+        position: relative;
+    }
+    .accordion-responsive .card-header button:after,
+    #registroAccordion .card-header button:after {
+        content: '\f078'; /* FontAwesome down arrow */
+        font-family: 'Font Awesome 5 Free';
+        font-weight: 900;
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        transition: transform 0.2s ease-in-out;
+    }
+    .accordion-responsive .card-header button.collapsed:after,
+    #registroAccordion .card-header button.collapsed:after {
+        transform: translateY(-50%) rotate(-90deg);
+    }
+    .accordion-responsive .card-body,
+    #registroAccordion .card-body {
+        padding: 0;
+    }
+    .accordion-responsive .list-group-item,
+    #registroAccordion .list-group-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.8rem 1rem;
+    }
+    .accordion-responsive .list-group-item strong {
+        color: var(--text-dark);
+    }
+    .accordion-responsive .list-group-item span,
+    .accordion-responsive .list-group-item input {
+        text-align: right;
+    }
+    .accordion-responsive .list-group-item input[type="number"] {
+        width: 100px;
+        flex-shrink: 0;
+        padding: 6px;
+        text-align: center;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+    }
+    .list-group-item.turno-header {
+        background-color: #f1f3f5;
+        font-weight: bold;
+        color: var(--text-dark);
+        justify-content: center;
+    }
+}
+
+/* --- Estilos para Heatmap del Dashboard Admin --- */
+.heatmap-table td {
+    font-weight: bold;
+    color: var(--text-dark);
+    transition: background-color 0.3s ease;
+}
+
+.heatmap-table .group-header td {
+    background-color: #e9ecef;
+    font-weight: 700;
+    color: #495057;
+}
+
+.heatmap-zero { background-color: #f8f9fa; color: #6c757d !important; }
+.heatmap-danger { background-color: #f8d7da; }
+.heatmap-warning { background-color: #fff3cd; }
+.heatmap-success { background-color: #d4edda; }
+.heatmap-excellent { background-color: #a3e9b3; }

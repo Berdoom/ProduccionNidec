@@ -1,0 +1,111 @@
+{% extends "layout.html" %}
+
+{% block title %}Reportes de Producción{% endblock %}
+{% block page_header %}Reportes de Producción{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <form id="reportForm" method="GET" action="{{ url_for('reportes') }}" data-no-spinner="true">
+        <div class="form-row align-items-end">
+            <div class="form-group col-md-3">
+                <label for="group">Grupo:</label>
+                <select id="group" name="group" class="form-control" {% if not is_admin %}disabled{% endif %}>
+                    <option value="IHP" {% if group == 'IHP' %}selected{% endif %}>IHP</option>
+                    <option value="FHP" {% if group == 'FHP' %}selected{% endif %}>FHP</option>
+                </select>
+            </div>
+            <div class="form-group col-md-2">
+                <label for="year">Año:</label>
+                <select id="year" name="year" class="form-control">
+                    {% for y in range(2024, 2031) %}
+                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group col-md-3">
+                <label for="month">Mes:</label>
+                <select id="month" name="month" class="form-control">
+                    {% for m in range(1, 13) %}
+                    <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m | month_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group col-md-auto">
+                <button type="submit" class="btn btn-nidec-style">
+                    <i class="fas fa-chart-line"></i> Generar Reporte
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div class="row">
+    <!-- Gráfica de Eficiencia Mensual -->
+    <div class="col-lg-6 mb-4">
+        <div class="content-section h-100">
+            <h4 class="mb-3">Tendencia de Eficiencia Mensual</h4>
+            {% if efficiency_data.labels %}
+            <div style="height: 400px; position: relative;"><canvas id="efficiencyChart"></canvas></div>
+            {% else %}
+            <div class="alert alert-warning">No hay suficientes datos para mostrar la tendencia de eficiencia.</div>
+            {% endif %}
+        </div>
+    </div>
+    <!-- Gráfica de Producción por Área -->
+    <div class="col-lg-6 mb-4">
+        <div class="content-section h-100">
+            <h4 class="mb-3">Producción Total por Área</h4>
+             {% if areas_data.labels %}
+            <div style="height: 400px; position: relative;"><canvas id="areasChart"></canvas></div>
+             {% else %}
+            <div class="alert alert-warning">No hay datos de producción por área para este mes.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Gráfica de Tendencia de Eficiencia
+    const efficiencyCtx = document.getElementById('efficiencyChart');
+    if (efficiencyCtx) {
+        const efficiencyData = {{ efficiency_data | tojson }};
+        new Chart(efficiencyCtx, {
+            type: 'line',
+            data: {
+                labels: efficiencyData.labels,
+                datasets: [{
+                    label: 'Eficiencia (%)',
+                    data: efficiencyData.data,
+                    borderColor: 'rgb(36, 184, 23)',
+                    backgroundColor: 'rgba(36, 184, 23, 0.1)',
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 110 } } }
+        });
+    }
+
+    // 2. Gráfica Comparativa de Áreas
+    const areasCtx = document.getElementById('areasChart');
+    if (areasCtx) {
+        const areasData = {{ areas_data | tojson }};
+        new Chart(areasCtx, {
+            type: 'bar',
+            data: {
+                labels: areasData.labels,
+                datasets: [{
+                    label: 'Unidades Producidas',
+                    data: areasData.data,
+                    backgroundColor: 'rgba(0, 178, 169, 0.8)'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+});
+</script>
+{% endblock %}

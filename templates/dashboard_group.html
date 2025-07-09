@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+
+{% block title %}Dashboard {{ group_name }}{% endblock %}
+{% block page_header %}Dashboard de Producción - {{ group_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Tarjeta de Resumen para el Grupo -->
+    <div class="col-lg-12 mb-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header text-white" style="background-color: var(--nidec-green);">
+                <h4 class="mb-0">Resumen del Día ({{ today }}) - {{ group_name }}</h4>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4 border-right">
+                        <h5>Pronóstico</h5>
+                        <h3 class="font-weight-bold">{{ summary.pronostico }}</h3>
+                    </div>
+                    <div class="col-md-4 border-right">
+                        <h5>Producido</h5>
+                        <h3 class="font-weight-bold">{{ summary.producido }}</h3>
+                        {% if summary.trend == 'up' %}
+                            <span class="text-success"><i class="fas fa-arrow-up"></i> Mejor que ayer</span>
+                        {% elif summary.trend == 'down' %}
+                            <span class="text-danger"><i class="fas fa-arrow-down"></i> Menor que ayer</span>
+                        {% else %}
+                            <span class="text-muted"><i class="fas fa-minus"></i> Igual que ayer</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4">
+                        <h5>Eficiencia</h5>
+                        <h3 class="font-weight-bold">{{ summary.eficiencia }}%</h3>
+                    </div>
+                </div>
+                <hr>
+                <div class="progress" style="height: 25px;">
+                    <div class="progress-bar" role="progressbar" style="width: {{ summary.eficiencia }}%; background-color: var(--nidec-green);" aria-valuenow="{{ summary.eficiencia }}" aria-valuemin="0" aria-valuemax="100">
+                        <strong>{{ summary.eficiencia }}%</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de Producción Detallada -->
+<div class="content-section">
+    <h4 class="mb-3">Desglose de Producción del Día por Área y Turno</h4>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover responsive-list-table">
+            <thead class="thead-light">
+                <tr class="text-center">
+                    <th style="text-align: left;" rowspan="2" class="align-middle">Área</th>
+                    {% for turno in turnos %}
+                    <th colspan="2">{{ turno }}</th>
+                    {% endfor %}
+                    <th rowspan="2" class="align-middle">Total Producido</th>
+                </tr>
+                 <tr class="text-center">
+                    {% for turno in turnos %}
+                    <th>Pronóstico</th>
+                    <th>Producido</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for area in areas %}
+                <tr>
+                    <td class="area-header" data-label="Área">{{ area }}</td>
+                    {% set total_producido_area = namespace(value=0) %}
+                    {% for turno in turnos %}
+                        {% set data = production_data.get(area, {}).get(turno, {}) %}
+                        {% set pronostico = data.get('pronostico', 0) %}
+                        {% set producido = data.get('producido', 0) %}
+                        {% set total_producido_area.value = total_producido_area.value + producido %}
+                        <td class="text-center" data-label="Pron. {{ turno }}">{{ pronostico }}</td>
+                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}" data-label="Prod. {{ turno }}">{{ producido }}</td>
+                    {% endfor %}
+                    <td class="text-center font-weight-bold" data-label="Total Producido">{{ total_producido_area.value }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

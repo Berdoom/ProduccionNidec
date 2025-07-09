@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Nidec Control de Producción{% endblock %}</title>
+    
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
+    
+</head>
+<body>
+    {% if session.get('loggedin') %}
+    <header class="header">
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('dashboard') }}">
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Nidec" style="max-height: 45px;">
+            </a>
+            <h3 class="ml-3 mb-0 page-header-text">{% block page_header %}Panel Principal{% endblock %}</h3>
+        </div>
+        <div class="user-info">
+            <span class="mr-3 d-none d-md-inline">
+                <i class="fas fa-user-circle"></i> {{ session.get('username') }} <strong>({{ session.get('role') }})</strong>
+            </span>
+            <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger"><i class="fas fa-sign-out-alt"></i> Salir</a>
+        </div>
+    </header>
+
+    <nav class="navbar navbar-expand-lg navbar-dark mb-4 nidec-navbar">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    {% if session.role in ['IHP', 'FHP'] %}
+                        <li class="nav-item {% if 'dashboard_group' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_group', group=session.role.lower()) }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard</a></li>
+                        <li class="nav-item {% if 'captura' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('captura', group=session.role.lower()) }}"><i class="fas fa-edit mr-1"></i>Captura</a></li>
+                        <li class="nav-item {% if 'registro' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('registro', group=session.role.lower()) }}"><i class="fas fa-history mr-1"></i>Registro</a></li>
+                        <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
+                    {% elif session.role == 'ADMIN' %}
+                        <li class="nav-item {% if 'dashboard_admin' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard Admin</a></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownIHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">IHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownIHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='ihp') }}">Dashboard IHP</a><a class="dropdown-item" href="{{ url_for('captura', group='ihp') }}">Captura IHP</a><a class="dropdown-item" href="{{ url_for('registro', group='ihp') }}">Registro IHP</a></div></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
+                        <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
+                        <li class="nav-item {% if 'bandeja' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('bandeja') }}"><i class="fas fa-inbox mr-1"></i>Análisis de Desviaciones</a></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs"></i> Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container-fluid mb-5">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Contenedor para las notificaciones Toast -->
+    <div aria-live="polite" aria-atomic="true" class="toast-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
+                        <div class="toast-header bg-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' if category == 'warning' else 'info' }} text-white">
+                            <strong class="mr-auto">
+                                {% if category == 'success' %}Éxito
+                                {% elif category == 'danger' %}Error
+                                {% elif category == 'warning' %}Advertencia
+                                {% else %}Notificación
+                                {% endif %}
+                            </strong>
+                            <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="toast-body bg-white">
+                            {{ message }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Script para Toasts y Spinners -->
+    <script>
+        $(document).ready(function() {
+            // Inicializar todos los toasts
+            $('.toast').toast('show');
+
+            // Lógica para spinners en botones de formularios
+            $('form').on('submit', function(e) {
+                // Solo aplicar a formularios que no tengan el atributo 'data-no-spinner'
+                if ($(this).data('no-spinner')) {
+                    return;
+                }
+                
+                const button = $(this).find('button[type="submit"]');
+                if (button.length > 0 && !button.is(':disabled')) {
+                    button.prop('disabled', true);
+                    button.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...');
+                }
+            });
+        });
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,211 @@
+{% extends "layout.html" %}
+
+{% block title %}Registro de Producción - {{ group_name }}{% endblock %}
+{% block page_header %}Registro de Producción {{ group_name }}{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <h4 class="mb-4">Consultar Registro por Fecha</h4>
+    <form method="GET" action="{{ url_for('registro', group=group_name.lower()) }}">
+        <div class="form-row align-items-end">
+            <div class="col-md-4"><label for="fecha" class="font-weight-bold">Fecha:</label><input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date }}"></div>
+            <div class="col-md-auto mt-2 mt-md-0"><button type="submit" class="btn btn-nidec-style"><i class="fas fa-search"></i> Consultar</button></div>
+            <div class="col-md-auto mt-2 mt-md-0"><a href="{{ url_for('registro', group=group_name.lower()) }}" class="btn btn-secondary"><i class="fas fa-calendar-day"></i> Hoy</a></div>
+            <div class="col-md-auto mt-2 mt-md-0"><a href="{{ url_for('export_excel', group=group_name, fecha=selected_date) }}" class="btn btn-success"><i class="fas fa-file-excel"></i> Exportar a Excel</a></div>
+        </div>
+    </form>
+</div>
+
+{% if production_data %}
+<!-- Tarjetas de Resumen -->
+<div class="row mt-4">
+    <div class="col-md-4 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h5 class="card-title">Pronóstico Total del Día</h5>
+                <h3 class="font-weight-bold">{{ "{:,.0f}".format(totals.pronostico) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h5 class="card-title">Producido Total del Día</h5>
+                <h3 class="font-weight-bold">{{ "{:,.0f}".format(totals.producido) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <h5 class="card-title">Eficiencia del Día</h5>
+                <h3 class="font-weight-bold">{{ "{:,.2f}".format(totals.eficiencia) }}%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="content-section mt-4">
+    <h5 class="mb-3">Desglose de datos para el: <span class="font-weight-bold" style="color: var(--nidec-green-dark);">{{ selected_date }}</span></h5>
+    
+    <!-- Vista de Escritorio -->
+    <div class="table-responsive desktop-only">
+        <table class="table table-bordered table-hover">
+            <thead class="thead-light">
+                <tr class="text-center">
+                    <th style="text-align: left;">Área</th>
+                    {% for turno in nombres_turnos %}
+                    <th colspan="2">{{ turno }}</th>
+                    {% endfor %}
+                </tr>
+                <tr class="text-center">
+                    <th></th>
+                    {% for _ in nombres_turnos %}
+                    <th>Pronóstico</th>
+                    <th>Producido</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for area in areas if area != 'Output' %}
+                <tr>
+                    <td style="font-weight: 600;">{{ area }}</td>
+                    {% for turno in nombres_turnos %}
+                        {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
+                        {% set pronostico = turno_data.get('pronostico', 0) %}
+                        {% set producido = turno_data.get('producido', 0) %}
+                        <td class="text-center">{{ pronostico }}</td>
+                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ producido }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="font-weight-bold text-center" style="background-color: #f8f9fa;">
+                <tr>
+                    <td>TOTALES</td>
+                    {% for turno in nombres_turnos %}
+                    <td>{{ totals.turnos[turno].pronostico }}</td>
+                    <td>{{ totals.turnos[turno].producido }}</td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <!-- Vista Móvil (Acordeón) -->
+    <div class="accordion-responsive" id="registroAccordion">
+    {% for area in areas if area != 'Output' %}
+        <div class="card">
+            <div class="card-header" id="headingReg{{ area | slug }}">
+                <button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapseReg{{ area | slug }}" aria-expanded="false" aria-controls="collapseReg{{ area | slug }}">
+                    {{ area }}
+                </button>
+            </div>
+            <div id="collapseReg{{ area | slug }}" class="collapse" aria-labelledby="headingReg{{ area | slug }}" data-parent="#registroAccordion">
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        {% for turno in nombres_turnos %}
+                            {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
+                            <li class="list-group-item turno-header">{{ turno }}</li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ turno_data.get('pronostico', 0) }}</strong></li>
+                            <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ turno_data.get('producido', 0) }}</strong></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+
+    {% if output_data and (output_data.pronostico or output_data.output) %}
+    <div class="mt-4">
+        <h5 class="mb-3">Producción Final</h5>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="thead-light"><tr><th style="width: 25%;">Área</th><th>Pronóstico</th><th>Output</th></tr></thead>
+                <tbody><tr style="background-color: #f2f2f2;"><td style="font-weight: 600;">Output</td><td class="text-center font-weight-bold">{{ output_data.pronostico }}</td><td class="text-center font-weight-bold">{{ output_data.output }}</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if production_data %}
+<div class="content-section mt-4">
+    <h4 class="mb-3">Gráfica de Producción vs. Meta</h4>
+    <div style="height: 400px; position: relative;"><canvas id="productionChart"></canvas></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% if production_data %}
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const productionData = {{ production_data | tojson }};
+        const outputData = {{ output_data | tojson }};
+        const areas = {{ (areas | reject('equalto', 'Output') | list) | tojson }};
+        const metaProduccion = {{ meta }};
+        
+        let labels = [...areas];
+        if (outputData && outputData.output) {
+            labels.push('Output');
+        }
+
+        const producidoData = areas.map(area => {
+            let totalProducido = 0;
+            if (productionData[area]) {
+                Object.values(productionData[area]).forEach(turno => { totalProducido += turno.producido || 0; });
+            }
+            return totalProducido;
+        });
+
+        if (outputData && outputData.output) {
+            producidoData.push(outputData.output);
+        }
+
+        const metaData = Array(labels.length).fill(metaProduccion);
+
+        const ctx = document.getElementById('productionChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Producción Real',
+                    data: producidoData,
+                    backgroundColor: 'rgba(36, 184, 23, 0.8)',
+                    borderColor: 'rgba(28, 140, 17, 1)',
+                    borderWidth: 1,
+                    order: 2
+                }, {
+                    type: 'line',
+                    label: 'Meta (' + metaProduccion + ')',
+                    data: metaData,
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.1,
+                    order: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Unidades' } } },
+                plugins: { title: { display: true, text: 'Producción por Área vs. Meta del Día', font: { size: 16 } }, tooltip: { mode: 'index', intersect: false } }
+            }
+        });
+    } catch (e) {
+        console.error("Error al crear la gráfica de {{ group_name }}:", e);
+        const chartContainer = document.getElementById('productionChart').parentElement;
+        chartContainer.innerHTML = '<div class="alert alert-danger">Ocurrió un error al generar la gráfica.</div>';
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

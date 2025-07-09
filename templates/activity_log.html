@@ -1,0 +1,99 @@
+<!-- templates/activity_log.html -->
+{% extends "layout.html" %}
+
+{% block title %}Log de Actividad{% endblock %}
+
+{% block page_header %}Log de Actividad del Sistema{% endblock %}
+
+{% block content %}
+<div class="content-section mb-4">
+    <h4 class="mb-3"><i class="fas fa-filter mr-2"></i>Filtrar Log de Actividad</h4>
+    <form method="GET" action="{{ url_for('activity_log') }}">
+        <div class="form-row">
+            <div class="form-group col-md-3">
+                <label for="fecha_inicio">Desde la fecha:</label>
+                <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}">
+            </div>
+            <div class="form-group col-md-3">
+                <label for="fecha_fin">Hasta la fecha:</label>
+                <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}">
+            </div>
+            <div class="form-group col-md-3">
+                <label for="usuario">Usuario:</label>
+                <input type="text" class="form-control" id="usuario" name="usuario" placeholder="Buscar por usuario..." value="{{ filtros.get('usuario', '') }}">
+            </div>
+            <div class="form-group col-md-3">
+                <label for="area_grupo">Área/Grupo:</label>
+                <select id="area_grupo" name="area_grupo" class="form-control">
+                    <option value="Todos" {% if not filtros.get('area_grupo') or filtros.get('area_grupo') == 'Todos' %}selected{% endif %}>Todos</option>
+                    <option value="IHP" {% if filtros.get('area_grupo') == 'IHP' %}selected{% endif %}>IHP</option>
+                    <option value="FHP" {% if filtros.get('area_grupo') == 'FHP' %}selected{% endif %}>FHP</option>
+                    <option value="ADMIN" {% if filtros.get('area_grupo') == 'ADMIN' %}selected{% endif %}>Admin</option>
+                    <option value="Sistema" {% if filtros.get('area_grupo') == 'Sistema' %}selected{% endif %}>Sistema</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row align-items-end">
+            <div class="form-group col-md-12 text-right">
+                <a href="{{ url_for('activity_log', limpiar=1) }}" class="btn btn-secondary">Limpiar Filtros</a>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search mr-1"></i> Filtrar</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+
+<div class="content-section">
+    <p class="text-muted">
+        Esta página muestra un registro de las acciones importantes realizadas en la aplicación. Se muestran los últimos 500 registros que coinciden con los filtros.
+    </p>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th style="width: 18%;">Fecha y Hora</th>
+                    <th style="width: 12%;">Usuario</th>
+                    <!-- Nueva Columna -->
+                    <th style="width: 10%;">Área/Grupo</th>
+                    <th style="width: 20%;">Acción</th>
+                    <th>Detalles</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ log.timestamp }}</td>
+                    <td>
+                        {% if log.username %}
+                            <span class="badge badge-info">{{ log.username }}</span>
+                        {% else %}
+                            <span class="badge badge-secondary">Sistema</span>
+                        {% endif %}
+                    </td>
+                    <!-- Celda para la nueva columna -->
+                    <td>
+                        {% if log.area_grupo == 'IHP' %}
+                            <span class="badge badge-role-ihp">{{ log.area_grupo }}</span>
+                        {% elif log.area_grupo == 'FHP' %}
+                            <span class="badge badge-role-fhp">{{ log.area_grupo }}</span>
+                        {% elif log.area_grupo == 'ADMIN' or log.area_grupo == 'Sistema' %}
+                             <span class="badge badge-role-admin">{{ log.area_grupo }}</span>
+                        {% elif log.area_grupo %}
+                            <span class="badge badge-secondary">{{ log.area_grupo }}</span>
+                        {% else %}
+                            <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.action }}</td>
+                    <td>{{ log.details }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center">No hay registros de actividad que coincidan con los filtros aplicados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

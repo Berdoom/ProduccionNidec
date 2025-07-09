@@ -1,0 +1,23 @@
+<div class="modal fade" id="reasonModal" tabindex="-1" aria-labelledby="reasonModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reasonModalLabel">¿Porqué no se cumplió el pronóstico?</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Cerrar"><span aria-hidden="true">×</span></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="modalDate">
+                <input type="hidden" id="modalArea">
+                <input type="hidden" id="modalTurno">
+                <div class="form-group">
+                    <label for="reasonText">Explica la razón del pronóstico:</label>
+                    <textarea class="form-control" id="reasonText" rows="3" placeholder="Ej: Faltó material, falla de máquina, etc..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-nidec-style" onclick="submitReason()">Enviar Razón</button>
+            </div>
+        </div>
+    </div>
+</div>
