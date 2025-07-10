@@ -45,7 +45,7 @@ except Exception as e:
 Base = declarative_base()
 Base.query = db_session.query_property()
 
-# --- Modelos de la Base de Datos (Usuario Actualizado) ---
+# --- Modelos de la Base de Datos ---
 
 class Usuario(Base):
     """Modelo para los usuarios del sistema."""
@@ -54,7 +54,6 @@ class Usuario(Base):
     username = Column(String(80), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
     role = Column(String(50), nullable=False) # Roles: ADMIN, IHP, FHP
-    # --- NUEVOS CAMPOS ---
     nombre_completo = Column(String(120), nullable=True)
     cargo = Column(String(80), nullable=True)
 
@@ -62,7 +61,6 @@ class Usuario(Base):
         self.username = username
         self.password_hash = generate_password_hash(password)
         self.role = role
-        # --- ASIGNACIÓN DE NUEVOS CAMPOS ---
         self.nombre_completo = nombre_completo
         self.cargo = cargo
 
@@ -160,7 +158,6 @@ def create_default_admin():
     except Exception as e:
         db_session.rollback()
         print(f"ERROR INESPERADO al verificar el usuario admin: {e}", file=sys.stderr)
-
 
 # --- SCRIPT DE EJECUCIÓN DIRECTA (PARA USO MANUAL) ---
 if __name__ == '__main__':

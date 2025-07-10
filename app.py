@@ -11,7 +11,6 @@ from collections import Counter
 import calendar
 
 # --- Importaciones de la Base de Datos ---
-# Importamos las funciones de inicialización junto con los modelos
 from sqlalchemy import func, exc, extract
 from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, init_db, create_default_admin
 
@@ -28,8 +27,6 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "una-clave-secreta-de-respaldo-muy-segura")
 
 # --- INICIALIZACIÓN DE LA BASE DE DATOS AL ARRANCAR ---
-# Este bloque es crucial. Se ejecuta una vez cuando la aplicación se inicia.
-# Se asegura de que las tablas y el usuario admin por defecto existan.
 print("INICIANDO APLICACIÓN FLASK...")
 with app.app_context():
     print("Ejecutando inicialización de la base de datos dentro del contexto de la aplicación...")
@@ -56,7 +53,6 @@ def shutdown_session(exception=None):
 
 @app.before_request
 def before_request_handler():
-    """Se ejecuta antes de cada petición para reiniciar el temporizador de sesión."""
     session.permanent = True
 
 # --- Constantes y Funciones de Utilidad ---
@@ -66,13 +62,11 @@ HORAS_TURNO = { 'Turno A': ['10AM', '1PM', '4PM'], 'Turno B': ['7PM', '10PM', '1
 NOMBRES_TURNOS = list(HORAS_TURNO.keys())
 
 def to_slug(text):
-    """Convierte un texto a un formato 'slug' seguro para IDs y nombres de campo."""
     return text.replace(' ', '_').replace('.', '').replace('/', '')
 
 app.jinja_env.filters['slug'] = to_slug
 
 def log_activity(action, details="", area_grupo=None):
-    """Registra una actividad en la base de datos."""
     try:
         log_entry = ActivityLog(
             timestamp=datetime.now(),
@@ -82,7 +76,6 @@ def log_activity(action, details="", area_grupo=None):
             area_grupo=area_grupo
         )
         db_session.add(log_entry)
-        # Se hará commit en la ruta principal, no aquí.
     except exc.SQLAlchemyError as e:
         db_session.rollback()
         print(f"Error al registrar actividad: {e}")
@@ -136,6 +129,7 @@ def login():
             session['user_id'] = user.id
             session['username'] = user.username
             session['role'] = user.role
+            session['nombre_completo'] = user.nombre_completo
             session['csrf_token'] = secrets.token_hex(16)
             log_activity("Inicio de sesión", f"Usuario '{user.username}' (Rol: {user.role})", area_grupo='Sistema')
             db_session.commit()
@@ -234,7 +228,6 @@ def get_output_data(group, date_str):
         flash(f"Error al obtener datos de Output: {e}", "danger")
     return {'pronostico': '', 'output': ''}
 
-# --- NUEVAS FUNCIONES PARA EL DASHBOARD ANALITICO ---
 def get_heatmap_data(selected_date):
     heatmap = {'IHP': {}, 'FHP': {}}
     all_areas = {'IHP': AREAS_IHP, 'FHP': AREAS_FHP}
@@ -293,39 +286,22 @@ def dashboard_admin():
         selected_date = datetime.now().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
         flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
-
     ihp_data = get_group_performance('IHP', selected_date_str)
     fhp_data = get_group_performance('FHP', selected_date_str)
-    
     total_pronostico = (int(ihp_data['pronostico'].replace(',', '')) + int(fhp_data['pronostico'].replace(',', '')))
     total_producido = (int(ihp_data['producido'].replace(',', '')) + int(fhp_data['producido'].replace(',', '')))
     total_eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
-    
-    global_kpis = {
-        'pronostico': f"{total_pronostico:,.0f}",
-        'producido': f"{total_producido:,.0f}",
-        'eficiencia': round(total_eficiencia, 2)
-    }
-
+    global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
     heatmap_data = get_heatmap_data(selected_date)
     latest_deviations = get_latest_deviations()
-
     today = datetime.now().date()
     if selected_date == today:
         period_label = f"Hoy ({selected_date_str})"
     else:
         period_label = f"Día: {selected_date_str}"
-
     return render_template(
-        'dashboard_admin.html', 
-        period_label=period_label,
-        selected_date=selected_date_str,
-        global_kpis=global_kpis,
-        ihp_data=ihp_data, 
-        fhp_data=fhp_data,
-        heatmap_data=heatmap_data,
-        latest_deviations=latest_deviations,
-        nombres_turnos=NOMBRES_TURNOS
+        'dashboard_admin.html', period_label=period_label, selected_date=selected_date_str, global_kpis=global_kpis,
+        ihp_data=ihp_data, fhp_data=fhp_data, heatmap_data=heatmap_data, latest_deviations=latest_deviations, nombres_turnos=NOMBRES_TURNOS
     )
 
 @app.route('/dashboard/<group>')
@@ -418,7 +394,6 @@ def reportes():
         flash(f"Error al calcular la comparación de áreas: {e}", "danger")
     return render_template('reportes.html', group=group, selected_year=year, selected_month=month, is_admin=is_admin, efficiency_data=efficiency_data, areas_data=areas_data)
 
-# --- Rutas de Interacción y Administración ---
 @app.route('/captura/<group>', methods=['GET', 'POST'])
 @login_required
 @csrf_required
@@ -634,19 +609,36 @@ def update_reason_status(reason_id):
 @csrf_required
 def manage_users():
     if request.method == 'POST':
-        username, password, role = request.form.get('username'), request.form.get('password'), request.form.get('role')
-        if not username or not password or not role: flash('Todos los campos son obligatorios.', 'warning')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role')
+        nombre_completo = request.form.get('nombre_completo')
+        cargo = request.form.get('cargo')
+        
+        if not all([username, password, role, nombre_completo, cargo]):
+            flash('Todos los campos son obligatorios.', 'warning')
         else:
             if db_session.query(Usuario).filter_by(username=username).first():
                 flash(f"El nombre de usuario '{username}' ya existe.", 'danger')
             else:
-                new_user = Usuario(username=username, password=password, role=role)
+                new_user = Usuario(
+                    username=username, 
+                    password=password, 
+                    role=role, 
+                    nombre_completo=nombre_completo, 
+                    cargo=cargo
+                )
                 db_session.add(new_user)
-                log_activity("Creación de usuario", f"Admin '{session.get('username')}' creó el usuario '{username}' con el rol '{role}'.", area_grupo='ADMIN')
+                log_activity(
+                    "Creación de usuario", 
+                    f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 
+                    area_grupo='ADMIN'
+                )
                 db_session.commit()
                 flash(f"Usuario '{username}' creado exitosamente.", 'success')
         return redirect(url_for('manage_users'))
-    users = db_session.query(Usuario).all()
+    
+    users = db_session.query(Usuario).order_by(Usuario.id).all()
     return render_template('manage_users.html', users=users)
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
@@ -664,7 +656,8 @@ def delete_user(user_id):
         log_activity("Eliminación de usuario", f"Admin '{session.get('username')}' eliminó al usuario '{username_to_delete}'.", area_grupo='ADMIN')
         db_session.commit()
         flash('Usuario eliminado exitosamente.', 'success')
-    else: flash('El usuario no existe.', 'danger')
+    else:
+        flash('El usuario no existe.', 'danger')
     return redirect(url_for('manage_users'))
 
 @app.route('/activity_log')
@@ -688,5 +681,4 @@ def activity_log():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    # El debug=True es bueno para desarrollo, pero en producción Render lo maneja.
     app.run(host='0.0.0.0', port=port, debug=False if os.getenv('RENDER') else True)
