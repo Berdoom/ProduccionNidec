@@ -22,7 +22,9 @@
         </div>
         <div class="user-info">
             <span class="mr-3 d-none d-md-inline">
-                <i class="fas fa-user-circle"></i> {{ session.get('username') }} <strong>({{ session.get('role') }})</strong>
+                <i class="fas fa-user-circle"></i> 
+                <!-- CAMBIO: Mostrar nombre completo o, si no existe, el username -->
+                <strong>{{ session.get('nombre_completo') or session.get('username') }}</strong> ({{ session.get('role') }})
             </span>
             <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger"><i class="fas fa-sign-out-alt"></i> Salir</a>
         </div>
@@ -73,7 +75,7 @@
                                 {% endif %}
                             </strong>
                             <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
+                                <span aria-hidden="true">×</span>
                             </button>
                         </div>
                         <div class="toast-body bg-white">
@@ -93,16 +95,11 @@
     <!-- Script para Toasts y Spinners -->
     <script>
         $(document).ready(function() {
-            // Inicializar todos los toasts
             $('.toast').toast('show');
-
-            // Lógica para spinners en botones de formularios
             $('form').on('submit', function(e) {
-                // Solo aplicar a formularios que no tengan el atributo 'data-no-spinner'
                 if ($(this).data('no-spinner')) {
                     return;
                 }
-                
                 const button = $(this).find('button[type="submit"]');
                 if (button.length > 0 && !button.is(':disabled')) {
                     button.prop('disabled', true);
