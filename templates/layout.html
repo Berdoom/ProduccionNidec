@@ -23,7 +23,6 @@
         <div class="user-info">
             <span class="mr-3 d-none d-md-inline">
                 <i class="fas fa-user-circle"></i> 
-                <!-- CAMBIO: Mostrar nombre completo o, si no existe, el username -->
                 <strong>{{ session.get('nombre_completo') or session.get('username') }}</strong> ({{ session.get('role') }})
             </span>
             <a href="{{ url_for('logout') }}" class="btn btn-sm btn-danger"><i class="fas fa-sign-out-alt"></i> Salir</a>
@@ -60,7 +59,6 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Contenedor para las notificaciones Toast -->
     <div aria-live="polite" aria-atomic="true" class="toast-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -92,7 +90,6 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- Script para Toasts y Spinners -->
     <script>
         $(document).ready(function() {
             $('.toast').toast('show');

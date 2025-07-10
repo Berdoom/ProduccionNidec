@@ -17,12 +17,10 @@
                     <label for="username" class="font-weight-bold">Nombre de Usuario:</label>
                     <input type="text" class="form-control" id="username" name="username" required>
                 </div>
-                <!-- NUEVO CAMPO: Nombre Completo -->
                 <div class="form-group">
                     <label for="nombre_completo" class="font-weight-bold">Nombre Completo:</label>
                     <input type="text" class="form-control" id="nombre_completo" name="nombre_completo" required>
                 </div>
-                <!-- NUEVO CAMPO: Cargo -->
                 <div class="form-group">
                     <label for="cargo" class="font-weight-bold">Cargo:</label>
                     <input type="text" class="form-control" id="cargo" name="cargo" required>
@@ -54,9 +52,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Usuario</th>
-                            <!-- NUEVA COLUMNA -->
                             <th>Nombre Completo</th>
-                            <!-- NUEVA COLUMNA -->
                             <th>Cargo</th>
                             <th>Rol</th>
                             <th>Acciones</th>
@@ -67,9 +63,7 @@
                         <tr>
                             <td>{{ user.id }}</td>
                             <td>{{ user.username }}</td>
-                            <!-- CELDA PARA NUEVO DATO -->
                             <td>{{ user.nombre_completo or 'N/A' }}</td>
-                             <!-- CELDA PARA NUEVO DATO -->
                             <td>{{ user.cargo or 'N/A' }}</td>
                             <td>
                                 {% if user.role == 'ADMIN' %}<span class="badge badge-role-admin">{{ user.role }}</span>
