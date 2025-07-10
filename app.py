@@ -9,10 +9,12 @@ from functools import wraps
 import locale
 from collections import Counter
 import calendar
+from flask_apscheduler import APScheduler
 
-# --- Importaciones de la Base de Datos ---
+# --- Importaciones de la Base de Datos y Correo ---
 from sqlalchemy import func, exc, extract
 from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, init_db, create_default_admin
+from mail_sender import send_email
 
 # --- Configurar locale para español (para nombres de meses y días) ---
 try:
@@ -24,28 +26,84 @@ except locale.Error:
         print("Locale 'es_ES' no encontrado, usando el default.")
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "una-clave-secreta-de-respaldo-muy-segura")
+app.secret_key = os.getenv("SECRET_KEY", "n1D3c$#pro")
 
-# --- INICIALIZACIÓN DE LA BASE DE DATOS AL ARRANCAR ---
+# ======================================================================
+# --- CONFIGURACIÓN DEL SISTEMA DE NOTIFICACIONES PROGRAMADAS ---
+# ======================================================================
+scheduler = APScheduler()
+
+def check_and_send_notifications():
+    """
+    Esta es la función que el programador ejecutará periódicamente.
+    """
+    with app.app_context():
+        print(f"[{datetime.now()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
+        
+        today = datetime.now().date()
+        now = datetime.now()
+        
+        missing_entries = []
+        
+        all_areas = list(set([a for a in AREAS_IHP if a != 'Output'] + [a for a in AREAS_FHP if a != 'Output']))
+        
+        for turno, horas in HORAS_TURNO.items():
+            for hora_str in horas:
+                try:
+                    hora_obj = datetime.strptime(hora_str, '%I%p').time()
+                    target_datetime = datetime.combine(today, hora_obj)
+                except ValueError:
+                    continue
+
+                if (target_datetime + timedelta(hours=1)) < now < (target_datetime + timedelta(hours=3)):
+                    for area in all_areas:
+                        grupo = 'IHP' if area in AREAS_IHP else 'FHP'
+                        entry_exists = db_session.query(ProduccionCaptura).filter(
+                            ProduccionCaptura.fecha == today,
+                            ProduccionCaptura.grupo == grupo,
+                            ProduccionCaptura.area == area,
+                            ProduccionCaptura.hora == hora_str
+                        ).first()
+                        
+                        if not entry_exists:
+                            missing_info = f"- Grupo {grupo}, Área: {area}, Hora: {hora_str}"
+                            missing_entries.append(missing_info)
+        
+        if missing_entries:
+            print(f"¡Se encontraron {len(missing_entries)} registros faltantes! Preparando para enviar correo.")
+            recipient = os.getenv('MAIL_RECIPIENT')
+            subject = f"Alerta: Faltan Registros de Producción ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+            
+            body_html = "<p>Se ha detectado que los siguientes registros de producción no han sido capturados a tiempo:</p><ul>"
+            for item in missing_entries:
+                body_html += f"<li>{item}</li>"
+            body_html += "</ul><p>Por favor, acceda al sistema para completar la información.</p>"
+            
+            send_email(recipient, subject, body_html)
+        else:
+            print(f"[{datetime.now()}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
+
+# --- INICIALIZACIÓN DE LA BASE DE DATOS Y DEL PROGRAMADOR ---
 print("INICIANDO APLICACIÓN FLASK...")
 with app.app_context():
-    print("Ejecutando inicialización de la base de datos dentro del contexto de la aplicación...")
+    print("Ejecutando inicialización de la base de datos...")
     init_db()
     create_default_admin()
     print("Inicialización de la base de datos completada.")
-# --- FIN DE INICIALIZACIÓN DE LA BASE DE DATOS ---
+    
+    if not scheduler.running:
+        scheduler.init_app(app)
+        scheduler.add_job(
+            id='check_production_job',
+            func=check_and_send_notifications,
+            trigger='interval',
+            minutes=5
+        )
+        scheduler.start()
+        print("Sistema de notificaciones programadas iniciado. Se ejecutará cada 30 minutos.")
 
 # Configuración del tiempo de expiración de la sesión por inactividad
 app.permanent_session_lifetime = timedelta(minutes=30)
-
-# --- Filtro personalizado para obtener el nombre del mes en español ---
-def month_name_filter(month_number):
-    try:
-        return calendar.month_name[int(month_number)].capitalize()
-    except (IndexError, ValueError):
-        return ''
-
-app.jinja_env.filters['month_name'] = month_name_filter
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
