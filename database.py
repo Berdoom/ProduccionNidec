@@ -1,28 +1,51 @@
 import os
+import sys
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 
-# Cargar variables de entorno desde el archivo .env
+# Cargar variables de entorno desde el archivo .env (principalmente para desarrollo local)
 load_dotenv()
 
-# --- Configuración de la Base de Datos ---
-basedir = os.path.abspath(os.path.dirname(__file__))
-default_sqlite_url = f"sqlite:///{os.path.join(basedir, 'produccion.db')}"
-DATABASE_URL = os.getenv("DATABASE_URL") or default_sqlite_url
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# --- Configuración de la Base de Datos (Robusta para Producción) ---
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
-db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+# En un entorno de producción como Render, DATABASE_URL DEBE estar definida.
+if not DATABASE_URL:
+    # Si estamos en Render (Render setea esta variable), es un error de configuración.
+    if os.getenv('RENDER'):
+        print("FATAL ERROR: La variable de entorno DATABASE_URL no está definida en el entorno de Render.", file=sys.stderr)
+        print("Por favor, configura la variable en el dashboard de tu servicio web.", file=sys.stderr)
+        sys.exit(1) # Detiene la aplicación si no puede encontrar la DB en producción.
+    else:
+        # Para desarrollo local, si no hay .env, usamos una base de datos SQLite por conveniencia.
+        print("ADVERTENCIA: DATABASE_URL no encontrada. Usando base de datos SQLite local 'produccion.db' para desarrollo.")
+        basedir = os.path.abspath(os.path.dirname(__file__))
+        DATABASE_URL = f"sqlite:///{os.path.join(basedir, 'produccion.db')}"
+
+# SQLAlchemy 1.4+ recomienda 'postgresql' en lugar de 'postgres' para nuevas conexiones.
+# Render usa 'postgres://', así que hacemos el reemplazo para máxima compatibilidad.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    print("Configurando conexión a la base de datos PostgreSQL de producción...")
+else:
+    print(f"Configurando conexión a la base de datos local: {DATABASE_URL.split('///')[0]}...")
+
+try:
+    engine = create_engine(DATABASE_URL)
+    db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+except Exception as e:
+    print(f"FATAL ERROR: No se pudo crear el motor de la base de datos con la URL proporcionada: {e}", file=sys.stderr)
+    sys.exit(1)
+
 
 Base = declarative_base()
 Base.query = db_session.query_property()
 
-# --- Modelos de la Base de Datos (sin cambios) ---
+# --- Modelos de la Base de Datos (Usuario Actualizado) ---
 
 class Usuario(Base):
     """Modelo para los usuarios del sistema."""
@@ -31,11 +54,17 @@ class Usuario(Base):
     username = Column(String(80), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
     role = Column(String(50), nullable=False) # Roles: ADMIN, IHP, FHP
+    # --- NUEVOS CAMPOS ---
+    nombre_completo = Column(String(120), nullable=True)
+    cargo = Column(String(80), nullable=True)
 
-    def __init__(self, username, password, role):
+    def __init__(self, username, password, role, nombre_completo=None, cargo=None):
         self.username = username
         self.password_hash = generate_password_hash(password)
         self.role = role
+        # --- ASIGNACIÓN DE NUEVOS CAMPOS ---
+        self.nombre_completo = nombre_completo
+        self.cargo = cargo
 
 class Pronostico(Base):
     """Modelo para almacenar los pronósticos de producción."""
@@ -88,47 +117,55 @@ class OutputData(Base):
 
 def init_db():
     """Crea todas las tablas si no existen."""
-    print("Verificando y creando tablas si no existen...")
-    Base.metadata.create_all(bind=engine)
-    print("Verificación de tablas completada.")
+    print("Verificando y creando tablas si es necesario...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Verificación de tablas completada exitosamente.")
+    except OperationalError as e:
+        print(f"ERROR OPERACIONAL al crear las tablas: {e}", file=sys.stderr)
+        print("Esto puede indicar un problema de conexión con la base de datos o permisos insuficientes.", file=sys.stderr)
+    except Exception as e:
+        print(f"ERROR INESPERADO al crear las tablas: {e}", file=sys.stderr)
 
 def create_default_admin():
-    """Crea un usuario administrador por defecto si no existe ninguno. Es seguro de llamar en entornos con múltiples workers."""
-    admin_user = db_session.query(Usuario).filter_by(role='ADMIN').first()
-    if not admin_user:
-        print("No se encontraron usuarios ADMIN. Creando usuario por defecto...")
-        default_admin = Usuario(username='admin', password='admin', role='ADMIN')
-        db_session.add(default_admin)
-        try:
-            db_session.commit()
-            print("Usuario 'admin' con contraseña 'admin' creado exitosamente.")
-        except IntegrityError:
-            db_session.rollback()
-            print("El usuario 'admin' ya fue creado por otro proceso. Se ignora la creación.")
-        except Exception as e:
-            db_session.rollback()
-            print(f"Ocurrió un error inesperado al crear el usuario admin: {e}")
-    else:
-        print("Ya existe al menos un usuario administrador.")
+    """Crea un usuario administrador por defecto si no existe ninguno. Es seguro de llamar múltiples veces."""
+    print("Verificando la existencia del usuario administrador...")
+    try:
+        admin_user_exists = db_session.query(Usuario).filter_by(role='ADMIN').first()
+        if not admin_user_exists:
+            print("No se encontró usuario ADMIN. Intentando crear usuario por defecto 'admin'...")
+            default_admin = Usuario(
+                username='admin', 
+                password='admin', 
+                role='ADMIN', 
+                nombre_completo='Administrador del Sistema', 
+                cargo='Admin'
+            )
+            db_session.add(default_admin)
+            try:
+                db_session.commit()
+                print("Usuario 'admin' con contraseña 'admin' creado exitosamente.")
+            except IntegrityError:
+                db_session.rollback()
+                print("El usuario 'admin' ya fue creado, probablemente por otro proceso. Operación segura.")
+            except Exception as e:
+                db_session.rollback()
+                print(f"ERROR al intentar guardar el usuario admin: {e}", file=sys.stderr)
+        else:
+            print("El usuario administrador ya existe.")
+    except OperationalError as e:
+        db_session.rollback()
+        print(f"ERROR OPERACIONAL al verificar el usuario admin: {e}", file=sys.stderr)
+        print("Asegúrate de que las tablas de la base de datos se hayan creado correctamente.", file=sys.stderr)
+    except Exception as e:
+        db_session.rollback()
+        print(f"ERROR INESPERADO al verificar el usuario admin: {e}", file=sys.stderr)
 
-# --- SCRIPT DE EJECUCIÓN DIRECTA ---
 
+# --- SCRIPT DE EJECUCIÓN DIRECTA (PARA USO MANUAL) ---
 if __name__ == '__main__':
-    """
-    Este bloque se ejecuta cuando corres el archivo directamente desde la terminal
-    usando el comando: python database.py
-    
-    Su propósito es crear la base de datos y el usuario admin inicial.
-    """
-    print("\nIniciando la configuración de la base de datos...")
-    
-    # 1. Crea las tablas
+    print("\n--- INICIANDO CONFIGURACIÓN MANUAL DE LA BASE DE DATOS ---")
     init_db()
-    
-    # 2. Crea el usuario administrador por defecto
     create_default_admin()
-
-    # Cierra la sesión de la base de datos para liberar la conexión
     db_session.remove()
-    
-    print("\nConfiguración finalizada. Puedes iniciar la aplicación Flask.")
+    print("\n--- CONFIGURACIÓN MANUAL FINALIZADA ---")

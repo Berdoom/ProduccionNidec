@@ -11,6 +11,7 @@ from collections import Counter
 import calendar
 
 # --- Importaciones de la Base de Datos ---
+# Importamos las funciones de inicialización junto con los modelos
 from sqlalchemy import func, exc, extract
 from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, init_db, create_default_admin
 
@@ -26,12 +27,15 @@ except locale.Error:
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "una-clave-secreta-de-respaldo-muy-segura")
 
-# --- INICIALIZACIÓN DE LA BASE DE DATOS ---
-# Este bloque se asegura de que las tablas y el usuario admin por defecto existan
-# cuando la aplicación se inicia. Es seguro ejecutarlo múltiples veces.
+# --- INICIALIZACIÓN DE LA BASE DE DATOS AL ARRANCAR ---
+# Este bloque es crucial. Se ejecuta una vez cuando la aplicación se inicia.
+# Se asegura de que las tablas y el usuario admin por defecto existan.
+print("INICIANDO APLICACIÓN FLASK...")
 with app.app_context():
+    print("Ejecutando inicialización de la base de datos dentro del contexto de la aplicación...")
     init_db()
     create_default_admin()
+    print("Inicialización de la base de datos completada.")
 # --- FIN DE INICIALIZACIÓN DE LA BASE DE DATOS ---
 
 # Configuración del tiempo de expiración de la sesión por inactividad
@@ -78,6 +82,7 @@ def log_activity(action, details="", area_grupo=None):
             area_grupo=area_grupo
         )
         db_session.add(log_entry)
+        # Se hará commit en la ruta principal, no aquí.
     except exc.SQLAlchemyError as e:
         db_session.rollback()
         print(f"Error al registrar actividad: {e}")
@@ -281,17 +286,14 @@ app.jinja_env.filters['heatmap_color'] = get_heatmap_color_class
 @login_required
 @role_required(['ADMIN'])
 def dashboard_admin():
-    # Obtener la fecha de los argumentos de la URL, si no existe, usar la fecha de hoy
     selected_date_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
-        # Si el formato de fecha es inválido, usar la fecha de hoy y notificar al usuario
         selected_date = datetime.now().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
         flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
 
-    # 1. KPIs para la fecha seleccionada
     ihp_data = get_group_performance('IHP', selected_date_str)
     fhp_data = get_group_performance('FHP', selected_date_str)
     
@@ -305,13 +307,9 @@ def dashboard_admin():
         'eficiencia': round(total_eficiencia, 2)
     }
 
-    # 2. Datos para el mapa de calor de la fecha seleccionada
     heatmap_data = get_heatmap_data(selected_date)
-    
-    # 3. Últimas desviaciones (esto es independiente de la fecha seleccionada)
     latest_deviations = get_latest_deviations()
 
-    # Etiqueta para mostrar en la UI
     today = datetime.now().date()
     if selected_date == today:
         period_label = f"Hoy ({selected_date_str})"
@@ -690,4 +688,5 @@ def activity_log():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # El debug=True es bueno para desarrollo, pero en producción Render lo maneja.
+    app.run(host='0.0.0.0', port=port, debug=False if os.getenv('RENDER') else True)
