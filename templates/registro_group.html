@@ -40,43 +40,38 @@
                 </tr>
             </thead>
             <tbody>
-                <!-- CAMBIO: Bucle reestructurado para incluir siempre el Output -->
-                {% for area in areas %}
-                    {% if area == 'Output' %}
-                        {# Renderiza la fila especial para Output si existen datos #}
-                        {% if output_data and (output_data.pronostico or output_data.output) %}
-                        <tr class="output-row">
-                            <td class="area-header">Output</td>
-                            <td colspan="{{ nombres_turnos|length * 2 }}" class="text-center">-</td>
-                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.pronostico) }}</td>
-                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.output) }}</td>
-                        </tr>
-                        {% endif %}
-                    {% else %}
-                        {# Renderiza la fila normal para las demás áreas #}
-                        <tr>
-                            <td class="area-header">{{ area }}</td>
-                            
-                            {% set total_pronostico_area = namespace(value=0) %}
-                            {% set total_producido_area = namespace(value=0) %}
+                <!-- Bucle para las áreas normales -->
+                {% for area in areas if area != 'Output' %}
+                <tr>
+                    <td class="area-header">{{ area }}</td>
+                    
+                    {% set total_pronostico_area = namespace(value=0) %}
+                    {% set total_producido_area = namespace(value=0) %}
 
-                            {% for turno in nombres_turnos %}
-                                {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
-                                {% set pronostico = turno_data.get('pronostico', 0) %}
-                                {% set producido = turno_data.get('producido', 0) %}
-                                
-                                {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
-                                {% set total_producido_area.value = total_producido_area.value + producido %}
+                    {% for turno in nombres_turnos %}
+                        {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
+                        {% set pronostico = turno_data.get('pronostico', 0) %}
+                        {% set producido = turno_data.get('producido', 0) %}
+                        
+                        {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
+                        {% set total_producido_area.value = total_producido_area.value + producido %}
 
-                                <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
-                                <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido) }}</td>
-                            {% endfor %}
+                        <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
+                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido) }}</td>
+                    {% endfor %}
 
-                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_pronostico_area.value) }}</td>
-                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_producido_area.value) }}</td>
-                        </tr>
-                    {% endif %}
+                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_pronostico_area.value) }}</td>
+                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_producido_area.value) }}</td>
+                </tr>
                 {% endfor %}
+
+                <!-- Fila explícita para el Output -->
+                <tr class="output-row">
+                    <td class="area-header">Output</td>
+                    <td colspan="{{ nombres_turnos|length * 2 }}" class="text-center align-middle font-italic text-muted">No aplica por turno</td>
+                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.pronostico) }}</td>
+                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.output) }}</td>
+                </tr>
             </tbody>
             <tfoot class="font-weight-bold text-center">
                 <tr class="table-dark">

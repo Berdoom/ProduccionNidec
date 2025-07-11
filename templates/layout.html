@@ -3,13 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Nidec Control de Producción{% endblock %}</title>
+    <title>{% block title %}Producción Nidec{% endblock %}</title>
     
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- Frameworks y Librerías -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    
+    <!-- Recursos Propios -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
     
+    <!-- Estilos en línea para funcionalidades específicas -->
+    <style>
+        /* Reglas de Diseño Responsivo */
+        /* Por defecto (Móvil Primero): se muestra el acordeón y el botón/enlace superior. */
+        .accordion-responsive, .report-problem-mobile {
+            display: block;
+        }
+        
+        /* Se oculta la vista de escritorio y el botón flotante por defecto. */
+        .desktop-only, .report-problem-desktop {
+            display: none;
+        }
+
+        /* En pantallas medianas (tablets, 768px) y más grandes (escritorios) */
+        @media (min-width: 768px) {
+            /* Se oculta la vista de móvil. */
+            .accordion-responsive, .report-problem-mobile {
+                display: none;
+            }
+            
+            /* Se muestra la vista de escritorio. */
+            .desktop-only, .report-problem-desktop {
+                display: block;
+            }
+        }
+
+        /* Estilo para los inputs de pronóstico en la tabla de captura */
+        .pronostico-turno-input {
+            background-color: #e6ffed !important;
+            border-color: #28a745 !important;
+            font-weight: bold;
+        }
+
+        /* Clases para el tamaño de fuente adaptativo */
+        .input-font-sm { font-size: 0.8em !important; }
+        .input-font-xs { font-size: 0.7em !important; }
+
+        /* Contenedor para el nuevo ícono de advertencia */
+        .validation-icon-container {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 1rem;
+            color: #ffc107; /* Color amarillo de advertencia */
+        }
+    </style>
 </head>
 <body>
     {% if session.get('loggedin') %}
@@ -20,7 +68,7 @@
             </a>
             <h3 class="ml-3 mb-0 page-header-text">{% block page_header %}Panel Principal{% endblock %}</h3>
         </div>
-        <!-- CAMBIO: Se oculta en pantallas medianas y pequeñas para moverlo al menú de navegación -->
+        <!-- Información de usuario para Escritorio -->
         <div class="user-info d-none d-lg-flex align-items-center">
             <span class="mr-3">
                 <i class="fas fa-user-circle"></i> 
@@ -37,24 +85,27 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mr-auto">
+                    <!-- Menú para usuarios IHP/FHP -->
                     {% if session.role in ['IHP', 'FHP'] %}
                         <li class="nav-item {% if 'dashboard_group' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_group', group=session.role.lower()) }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard</a></li>
                         <li class="nav-item {% if 'captura' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('captura', group=session.role.lower()) }}"><i class="fas fa-edit mr-1"></i>Captura</a></li>
                         <li class="nav-item {% if 'registro' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('registro', group=session.role.lower()) }}"><i class="fas fa-history mr-1"></i>Registro</a></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
+                    
+                    <!-- Menú para Administradores -->
                     {% elif session.role == 'ADMIN' %}
                         <li class="nav-item {% if 'dashboard_admin' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard Admin</a></li>
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownIHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">IHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownIHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='ihp') }}">Dashboard IHP</a><a class="dropdown-item" href="{{ url_for('captura', group='ihp') }}">Captura IHP</a><a class="dropdown-item" href="{{ url_for('registro', group='ihp') }}">Registro IHP</a></div></li>
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
-                        <li class="nav-item {% if 'bandeja' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('bandeja') }}"><i class="fas fa-inbox mr-1"></i>Análisis de Desviaciones</a></li>
-                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs"></i> Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
+                        <li class="nav-item {% if 'centro_acciones' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('centro_acciones') }}"><i class="fas fa-inbox fa-fw mr-1"></i>Centro de Acciones</a></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs mr-1"></i>Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
                     {% endif %}
                 </ul>
-                <!-- CAMBIO: Se añade información de usuario y botón de salir para la vista móvil -->
+                <!-- Información de usuario para Móvil (dentro del menú hamburguesa) -->
                 <ul class="navbar-nav d-lg-none">
                     <li class="nav-item pt-2 pb-2" style="border-top: 1px solid rgba(255,255,255,0.2);">
-                        <span class="nav-link">
+                        <span class="nav-link text-white-50">
                             <i class="fas fa-user-circle"></i>
                             <strong>{{ session.get('nombre_completo') or session.get('username') }}</strong>
                              ({{ session.get('role') }})
@@ -75,6 +126,7 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Contenedor para los mensajes flash (toasts) -->
     <div aria-live="polite" aria-atomic="true" class="toast-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -101,6 +153,7 @@
         {% endwith %}
     </div>
 
+    <!-- Scripts de JavaScript -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -108,7 +161,10 @@
 
     <script>
         $(document).ready(function() {
+            // Inicializar toasts
             $('.toast').toast('show');
+            
+            // Script global para deshabilitar botones de submit y mostrar spinner
             $('form').on('submit', function(e) {
                 if ($(this).data('no-spinner')) {
                     return;

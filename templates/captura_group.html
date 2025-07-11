@@ -10,11 +10,14 @@
           data-submit-reason-url="{{ url_for('submit_reason') }}">
         <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
         
-        <!-- Selector de Fecha -->
+        <!-- Selector de Fecha y Acciones Superiores -->
         <div class="form-row align-items-center mb-4">
             <div class="col-auto"><label for="fecha" class="col-form-label font-weight-bold">Fecha:</label></div>
-            <div class="col-sm-4"><input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date | e }}" onchange="handleDateChange()"></div>
+            <div class="col-sm-4"><input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date | e }}" onchange="this.form.method='get'; this.form.action='{{ url_for('captura', group=group_name.lower()) }}'; this.form.submit()"></div>
             <div class="col-auto"><a href="{{ url_for('captura', group=group_name.lower()) }}" class="btn btn-secondary"><i class="fas fa-calendar-day"></i> Hoy</a></div>
+            <div class="col-auto report-problem-mobile">
+                <button type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#reportProblemModal"><i class="fas fa-flag"></i> Reportar</button>
+            </div>
         </div>
 
         <h4 class="mt-5">Producción por Área</h4>
@@ -23,7 +26,7 @@
         <!--        VISTA PARA ESCRITORIO        -->
         <!-- =================================== -->
         <div class="table-responsive desktop-only">
-            <table class="table table-bordered table-sm" style="min-width: 1350px;">
+            <table class="table table-bordered table-sm" style="min-width: 1400px;">
                 <thead class="thead-light">
                     <tr class="text-center">
                         <th rowspan="2" class="align-middle" style="width: 12%;">Área</th>
@@ -44,39 +47,36 @@
                 <tbody>
                     {% for area in areas if area != 'Output' %}
                     {% set area_slug = area | slug %}
-                    <tr data-area-slug="{{ area_slug }}">
-                        <td class="font-weight-bold">{{ area }}</td>
+                    <tr data-area-slug="{{ area_slug }}" data-area-name="{{ area }}">
+                        <td class="font-weight-bold align-middle">{{ area }}</td>
                         <td class="text-center align-middle font-weight-bold total-column" id="total_pronostico_area_{{ area_slug }}">0</td>
                         
-                        <!-- Celdas para cada turno -->
                         {% for turno_name in nombres_turnos %}
                             {% set turno_slug = turno_name | slug %}
                             {% set turno_data = data.get(area, {}).get(turno_name, {}) %}
                             <td>
                                 <input type="number" name="pronostico_{{ area_slug }}_{{ turno_slug }}"
                                        value="{{ turno_data.get('pronostico', '') | e }}"
-                                       min="0" class="form-control form-control-sm text-center pronostico-turno-input"
-                                       oninput="calculateAllTotals('{{ area_slug }}')">
+                                       min="0" class="form-control form-control-sm text-center pronostico-turno-input adaptive-font"
+                                       oninput="calculateAllTotals('{{ area_slug }}')"
+                                       {% if turno_data.get('pronostico') is not none and turno_data.get('pronostico')|string != '' and session.role != 'ADMIN' %}readonly{% endif %}>
                             </td>
                             {% for hora in horas_turno[turno_name] %}
                             <td>
                                 <input type="number" name="produccion_{{ area_slug }}_{{ hora }}"
                                        value="{{ turno_data.get(hora, '') | e }}"
-                                       min="0" class="form-control form-control-sm text-center"
+                                       min="0" class="form-control form-control-sm text-center produccion-hora-input adaptive-font"
                                        oninput="calculateAllTotals('{{ area_slug }}')">
                             </td>
                             {% endfor %}
                             <td class="text-center align-middle font-weight-bold turno-total-cell">
                                 <span id="total_produccion_turno_{{ area_slug }}_{{ turno_slug }}">0</span>
-                                <!-- Contenedor para el ícono de razón -->
-                                <span class="reason-icon-container" 
-                                      id="reason_icon_container_{{ area_slug }}_{{ turno_slug }}"
-                                      data-toggle="modal" 
-                                      data-target="#reasonModal"
+                                <span class="validation-icon-container" 
+                                      id="validation_icon_container_{{ area_slug }}_{{ turno_slug }}"
                                       data-area-name="{{ area }}"
                                       data-turno-name="{{ turno_name }}"
                                       data-date="{{ selected_date }}"
-                                      onclick="setReasonModalData(this)">
+                                      onclick="handleValidationIconClick(this)">
                                 </span>
                             </td>
                         {% endfor %}
@@ -87,18 +87,16 @@
                 </tbody>
             </table>
         </div>
-
+        
         <!-- =================================== -->
         <!--          VISTA PARA MÓVIL           -->
         <!-- =================================== -->
         <div id="accordionCaptura" class="accordion-responsive">
-        {% for area in areas if area != 'Output' %}
+            {% for area in areas if area != 'Output' %}
             {% set area_slug = area | slug %}
             <div class="card">
                 <div class="card-header" id="heading{{ area_slug }}">
-                    <button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse{{ area_slug }}" aria-expanded="false" aria-controls="collapse{{ area_slug }}">
-                        {{ area }}
-                    </button>
+                    <button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapse{{ area_slug }}" aria-expanded="false" aria-controls="collapse{{ area_slug }}">{{ area }}</button>
                 </div>
                 <div id="collapse{{ area_slug }}" class="collapse" aria-labelledby="heading{{ area_slug }}" data-parent="#accordionCaptura">
                     <div class="card-body">
@@ -107,28 +105,31 @@
                                 {% set turno_slug = turno_name | slug %}
                                 {% set turno_data = data.get(area, {}).get(turno_name, {}) %}
                                 <li class="list-group-item turno-header">{{ turno_name }}</li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <li class="list-group-item">
                                     <strong>Pronóstico:</strong>
-                                    <input type="number" name="mobile_pronostico_{{ area_slug }}_{{ turno_slug }}" value="{{ turno_data.get('pronostico', '') | e }}" class="form-control-sm" style="width: 100px;" oninput="syncAndCalc('pronostico', '{{ area_slug }}', '{{ turno_slug }}', this.value)">
+                                    <input type="number" value="{{ turno_data.get('pronostico', '') | e }}" 
+                                           class="form-control-sm pronostico-turno-input adaptive-font" style="width: 100px; float: right;"
+                                           oninput="syncAndCalc('pronostico', '{{ area_slug }}', '{{ turno_slug }}', this.value)" 
+                                           {% if turno_data.get('pronostico') is not none and turno_data.get('pronostico')|string != '' and session.role != 'ADMIN' %}readonly{% endif %}>
                                 </li>
                                 {% for hora in horas_turno[turno_name] %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <li class="list-group-item">
                                     <strong>{{ hora }}:</strong>
-                                    <input type="number" name="mobile_produccion_{{ area_slug }}_{{ hora }}" value="{{ turno_data.get(hora, '') | e }}" class="form-control-sm" style="width: 100px;" oninput="syncAndCalc('produccion', '{{ area_slug }}', '{{ hora }}', this.value)">
+                                    <input type="number" value="{{ turno_data.get(hora, '') | e }}" 
+                                           class="form-control-sm adaptive-font" style="width: 100px; float: right;" 
+                                           oninput="syncAndCalc('produccion', '{{ area_slug }}', '{{ hora }}', this.value)">
                                 </li>
                                 {% endfor %}
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <li class="list-group-item">
                                     <strong>Total Turno:</strong>
-                                    <div>
+                                    <div style="float: right;">
                                         <strong id="mobile_total_produccion_turno_{{ area_slug }}_{{ turno_slug }}">0</strong>
-                                        <span class="reason-icon-container" 
-                                              id="mobile_reason_icon_container_{{ area_slug }}_{{ turno_slug }}"
-                                              data-toggle="modal" 
-                                              data-target="#reasonModal"
+                                        <span class="validation-icon-container" 
+                                              id="mobile_validation_icon_container_{{ area_slug }}_{{ turno_slug }}"
                                               data-area-name="{{ area }}"
                                               data-turno-name="{{ turno_name }}"
                                               data-date="{{ selected_date }}"
-                                              onclick="setReasonModalData(this)">
+                                              onclick="handleValidationIconClick(this)">
                                         </span>
                                     </div>
                                 </li>
@@ -137,10 +138,9 @@
                     </div>
                 </div>
             </div>
-        {% endfor %}
+            {% endfor %}
         </div>
 
-        <!-- Sección de Output -->
         <h4 class="mt-5">Producción Final (Output)</h4>
         <div class="table-responsive">
              <table class="table table-bordered">
@@ -148,30 +148,218 @@
                 <tbody>
                     <tr>
                         <td style="font-weight: 600;">Output</td>
-                        <td><input type="number" name="pronostico_output" class="form-control" value="{{ output_data.pronostico | e }}" min="0"></td>
-                        <td><input type="number" name="produccion_output" class="form-control" value="{{ output_data.output | e }}" min="0"></td>
+                        <td><input type="number" name="pronostico_output" class="form-control adaptive-font" value="{{ output_data.pronostico | e }}" min="0" {% if output_data.pronostico is not none and output_data.pronostico|string != '' and session.role != 'ADMIN' %}readonly{% endif %}></td>
+                        <td><input type="number" name="produccion_output" class="form-control adaptive-font" value="{{ output_data.output | e }}" min="0"></td>
                     </tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- CAMBIO: Contenedor para el botón de guardado -->
         <div class="save-button-container">
              <button type="submit" class="btn btn-lg btn-nidec-style"><i class="fas fa-save"></i> Guardar Todos los Cambios</button>
         </div>
     </form>
 </div>
 
+<!-- Modales -->
 {% include 'modals/reason_modal.html' %}
 {% include 'modals/feedback_modal.html' %}
+{% include 'modals/report_problem_modal.html' %}
+
+<!-- Botón Flotante para Escritorio -->
+<button type="button" class="btn btn-danger btn-lg rounded-circle report-problem-desktop" data-toggle="modal" data-target="#reportProblemModal" style="position: fixed; bottom: 20px; right: 20px; z-index: 1050;" title="Reportar un Problema">
+    <i class="fas fa-flag"></i>
+</button>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/captura.js') }}"></script>
 <script>
-    // Estas variables globales son necesarias para el archivo captura.js
     const HORAS_TURNO_JS = {{ horas_turno | tojson }};
     const NOMBRES_TURNOS_JS = {{ nombres_turnos | tojson }};
-    const PRONOSTICOS_DATA_JS = {{ data | tojson }}; // Contiene pronósticos y razones existentes
+    const PRONOSTICOS_DATA_JS = {{ data | tojson }};
+
+    function toSlug(text) {
+        if (typeof text !== 'string') return '';
+        return text.replace(/ /g, '_').replace(/\./g, '').replace(/\//g, '');
+    }
+
+    function updateInputFontSize(input) {
+        const len = input.value.length;
+        input.classList.remove('input-font-sm', 'input-font-xs');
+        if (len > 6) {
+            input.classList.add('input-font-xs');
+        } else if (len > 4) {
+            input.classList.add('input-font-sm');
+        }
+    }
+
+    function syncAndCalc(type, areaSlug, identifier, value) {
+        let desktopInputName = (type === 'pronostico') 
+            ? `pronostico_${areaSlug}_${identifier}` 
+            : `produccion_${areaSlug}_${identifier}`;
+        
+        const desktopInput = document.querySelector(`input[name="${desktopInputName}"]`);
+        if (desktopInput) {
+            desktopInput.value = value;
+            calculateAllTotals(areaSlug);
+        }
+    }
+    
+    function handleValidationIconClick(container) {
+        if (container.classList.contains('clickable-icon')) {
+            document.getElementById('modalDate').value = container.dataset.date;
+            document.getElementById('modalArea').value = container.dataset.areaName;
+            document.getElementById('modalTurno').value = container.dataset.turnoName;
+            document.getElementById('reasonText').value = ''; 
+            $('#reasonModal').modal('show');
+        }
+    }
+
+    function calculateAllTotals(areaSlug) {
+        const row = document.querySelector(`tr[data-area-slug="${areaSlug}"]`);
+        if (!row) return;
+
+        const areaName = row.dataset.areaName;
+        let totalPronosticoArea = 0;
+        let totalProduccionArea = 0;
+
+        NOMBRES_TURNOS_JS.forEach(turnoName => {
+            const turnoSlug = toSlug(turnoName);
+            const pronosticoInput = row.querySelector(`input[name="pronostico_${areaSlug}_${turnoSlug}"]`);
+            const pronosticoValor = Number(pronosticoInput.value) || 0;
+
+            let totalProduccionTurno = 0;
+            let allInputsFilled = true;
+
+            HORAS_TURNO_JS[turnoName].forEach(hora => {
+                const produccionInput = row.querySelector(`input[name="produccion_${areaSlug}_${hora}"]`);
+                if (produccionInput.value === '') {
+                    allInputsFilled = false;
+                }
+                totalProduccionTurno += Number(produccionInput.value) || 0;
+            });
+            
+            row.querySelector(`#total_produccion_turno_${areaSlug}_${turnoSlug}`).textContent = totalProduccionTurno;
+            const mobileTotalSpan = document.getElementById(`mobile_total_produccion_turno_${areaSlug}_${turnoSlug}`);
+            if (mobileTotalSpan) mobileTotalSpan.textContent = totalProduccionTurno;
+            
+            totalProduccionArea += totalProduccionTurno;
+            totalPronosticoArea += pronosticoValor;
+
+            const hasExistingReason = PRONOSTICOS_DATA_JS[areaName]?.[turnoName]?.razon_desviacion;
+            const iconContainer = document.getElementById(`validation_icon_container_${areaSlug}_${turnoSlug}`);
+            const mobileIconContainer = document.getElementById(`mobile_validation_icon_container_${areaSlug}_${turnoSlug}`);
+            
+            [iconContainer, mobileIconContainer].forEach(container => {
+                if(container) {
+                    container.innerHTML = '';
+                    container.classList.remove('clickable-icon');
+                    container.style.cursor = 'default';
+
+                    if (hasExistingReason) {
+                        container.innerHTML = '<i class="fas fa-check-circle text-success" title="Razón ya enviada"></i>';
+                    } else if (allInputsFilled && pronosticoValor > 0 && totalProduccionTurno < pronosticoValor) {
+                        container.innerHTML = '<i class="fas fa-exclamation-triangle" title="Justificar desviación"></i>';
+                        container.classList.add('clickable-icon');
+                        container.style.cursor = 'pointer';
+                    }
+                }
+            });
+        });
+
+        row.querySelector(`#total_pronostico_area_${areaSlug}`).textContent = totalPronosticoArea;
+        row.querySelector(`#total_produccion_area_${areaSlug}`).textContent = totalProduccionArea;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('tr[data-area-slug]').forEach(row => calculateAllTotals(row.dataset.areaSlug));
+        
+        document.querySelectorAll('input.adaptive-font').forEach(input => {
+            updateInputFontSize(input);
+            input.addEventListener('input', () => updateInputFontSize(input));
+        });
+
+        const reportForm = document.getElementById('reportProblemForm');
+        if (reportForm) {
+            reportForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const form = e.target;
+                const formData = new FormData(form);
+                const submitButton = form.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+
+                fetch("{{ url_for('solicitar_correccion') }}", {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        $('#reportProblemModal').modal('hide');
+                        alert(data.message);
+                        form.reset();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => console.error('Error:', error))
+                .finally(() => {
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Enviar Reporte';
+                });
+            });
+        }
+    });
+
+    function submitReason() {
+        const reasonText = document.getElementById('reasonText').value;
+        if (!reasonText.trim()) {
+            alert('La razón no puede estar vacía.');
+            return;
+        }
+
+        $('#reasonModal').modal('hide');
+        
+        const form = document.getElementById('productionForm');
+        const submitUrl = form.dataset.submitReasonUrl;
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        const group = form.dataset.group;
+
+        const areaName = document.getElementById('modalArea').value;
+        const turnoName = document.getElementById('modalTurno').value;
+        const areaSlug = toSlug(areaName);
+        const turnoSlug = toSlug(turnoName);
+
+        $.ajax({
+            url: submitUrl,
+            type: "POST",
+            data: {
+                csrf_token: csrfToken,
+                date: document.getElementById('modalDate').value,
+                area: areaName,
+                group: group,
+                reason: reasonText,
+                turno_name: turnoName
+            },
+            success: function(response) {
+                if (response.status === 'success') {
+                    if (PRONOSTICOS_DATA_JS[areaName]) {
+                        if (!PRONOSTICOS_DATA_JS[areaName][turnoName]) {
+                            PRONOSTICOS_DATA_JS[areaName][turnoName] = {};
+                        }
+                        PRONOSTICOS_DATA_JS[areaName][turnoName].razon_desviacion = reasonText;
+                    }
+                    calculateAllTotals(areaSlug);
+                    alert(response.message);
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('No se pudo comunicar con el servidor.');
+            }
+        });
+    }
 </script>
 {% endblock %}

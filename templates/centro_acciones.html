@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block title %}Centro de Acciones{% endblock %}
+{% block page_header %}Centro de Acciones{% endblock %}
+
+{% block content %}
+<div class="content-section mb-4">
+    <form method="GET" action="{{ url_for('centro_acciones') }}">
+        <div class="form-row">
+            <div class="form-group col-md-3">
+                <label for="fecha_inicio">Desde (Fecha del evento):</label>
+                <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ filtros.get('fecha_inicio', '') }}">
+            </div>
+            <div class="form-group col-md-3">
+                <label for="fecha_fin">Hasta (Fecha del evento):</label>
+                <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ filtros.get('fecha_fin', '') }}">
+            </div>
+            <div class="form-group col-md-2">
+                <label for="grupo">Grupo:</label>
+                <select id="grupo" name="grupo" class="form-control">
+                    <option value="Todos">Todos</option>
+                    <option value="IHP" {% if filtros.get('grupo') == 'IHP' %}selected{% endif %}>IHP</option>
+                    <option value="FHP" {% if filtros.get('grupo') == 'FHP' %}selected{% endif %}>FHP</option>
+                </select>
+            </div>
+            <div class="form-group col-md-2">
+                <label for="tipo">Tipo:</label>
+                <select id="tipo" name="tipo" class="form-control">
+                    <option value="Todos">Todos</option>
+                    <option value="Desviacion" {% if filtros.get('tipo') == 'Desviacion' %}selected{% endif %}>Desviación</option>
+                    <option value="Correccion" {% if filtros.get('tipo') == 'Correccion' %}selected{% endif %}>Corrección</option>
+                </select>
+            </div>
+            <div class="form-group col-md-2">
+                <label for="status">Estado:</label>
+                <select id="status" name="status" class="form-control">
+                    <option value="Todos">Todos</option>
+                    <option value="Pendiente" {% if filtros.get('status') == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+                    <option value="Nuevo" {% if filtros.get('status') == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                    <option value="En Proceso" {% if filtros.get('status') == 'En Proceso' %}selected{% endif %}>En Proceso</option>
+                    <option value="Resuelto" {% if filtros.get('status') == 'Resuelto' %}selected{% endif %}>Resuelto</option>
+                </select>
+            </div>
+        </div>
+        <div class="text-right">
+            <a href="{{ url_for('centro_acciones', limpiar=1) }}" class="btn btn-secondary">Limpiar</a>
+            <button type="submit" class="btn btn-primary">Filtrar</button>
+        </div>
+    </form>
+</div>
+
+<div class="content-section">
+    {% for item in items %}
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>{{ item.tipo }}</strong> en {{ item.area }} ({{ item.grupo }} - {{ item.turno }})
+                <small class="text-muted">| Evento: {{ item.fecha_evento.strftime('%Y-%m-%d') }} | Reportado por: {{ item.usuario }}</small>
+            </div>
+            <span class="badge badge-pill {% if item.status in ['Nuevo', 'Pendiente'] %}badge-warning{% elif item.status == 'En Proceso' %}badge-info{% else %}badge-success{% endif %}">{{ item.status }}</span>
+        </div>
+        <div class="card-body">
+            <p class="card-text">{{ item.detalles }}</p>
+            <hr>
+            <form method="POST" action="{{ url_for('update_solicitud_status', solicitud_id=item.id) if 'Corrección' in item.tipo else url_for('update_reason_status', reason_id=item.id) }}">
+                 <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                 <div class="form-row align-items-center">
+                    <div class="col-md-4">
+                        <select name="status" class="form-control">
+                            <option value="Pendiente" {% if item.status == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+                            <option value="Nuevo" {% if item.status == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                            <option value="En Proceso" {% if item.status == 'En Proceso' %}selected{% endif %}>En Proceso</option>
+                            <option value="Resuelto" {% if item.status == 'Resuelto' %}selected{% endif %}>Resuelto</option>
+                        </select>
+                    </div>
+                    {% if 'Corrección' in item.tipo %}
+                    <div class="col-md-6">
+                        <input type="text" name="admin_notas" class="form-control" placeholder="Añadir notas de resolución...">
+                    </div>
+                    {% endif %}
+                    <div class="col-md-2"><button type="submit" class="btn btn-sm btn-primary btn-block">Actualizar</button></div>
+                 </div>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-center text-muted">No hay ítems que coincidan con los filtros aplicados.</p>
+    {% endfor %}
+</div>
+{% endblock %}

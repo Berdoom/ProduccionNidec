@@ -113,22 +113,25 @@
         </div>
     </div>
 
-    <!-- 3. Últimas Desviaciones Reportadas -->
+    <!-- CAMBIO: Sección actualizada para reflejar el Centro de Acciones -->
     <div class="col-lg-4 mb-4">
         <div class="card shadow-sm h-100">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Últimos mensajes en la bandeja</h5>
+                <h5 class="mb-0"><i class="fas fa-inbox"></i> Últimas Acciones Pendientes</h5>
             </div>
-            {% if latest_deviations %}
+            {% if latest_pending_items %}
             <div class="list-group list-group-flush">
-                {% for dev in latest_deviations %}
-                <a href="{{ url_for('bandeja') }}" class="list-group-item list-group-item-action">
+                {% for item in latest_pending_items %}
+                <a href="{{ url_for('centro_acciones') }}" class="list-group-item list-group-item-action">
                     <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">{{ dev.grupo }} - {{ dev.area }} ({{ dev.turno }})</h6>
-                        <small>{{ dev.fecha.strftime('%Y-%m-%d') }}</small>
+                        <h6 class="mb-1">
+                            <span class="badge {% if 'Desviación' in item.tipo %}badge-warning{% else %}badge-danger{% endif %}">{{ item.tipo }}</span>
+                            {{ item.area }}
+                        </h6>
+                        <small>{{ item.timestamp.strftime('%Y-%m-%d') }}</small>
                     </div>
-                    <p class="mb-1 small text-truncate">"{{ dev.razon_desviacion }}"</p>
-                    <small class="text-muted">Enviado por: {{ dev.usuario_razon }}</small>
+                    <p class="mb-1 small text-truncate">"{{ item.detalles }}"</p>
+                    <small class="text-muted">Enviado por: {{ item.usuario }}</small>
                 </a>
                 {% endfor %}
             </div>
@@ -136,7 +139,7 @@
             <div class="card-body text-center text-muted d-flex align-items-center justify-content-center">
                 <div>
                     <i class="fas fa-check-circle fa-3x text-success mb-2"></i>
-                    <p class="mb-0">No hay desviaciones abiertas reportadas.</p>
+                    <p class="mb-0">¡Excelente! No hay acciones pendientes.</p>
                 </div>
             </div>
             {% endif %}

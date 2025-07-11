@@ -71,6 +71,7 @@
                     <th style="width: 5%;"></th>
                     <th style="width: 15%;">Fecha y Hora</th>
                     <th style="width: 10%;">Usuario</th>
+                    <th style="width: 10%;">Turno</th> <!-- CAMBIO: Nueva columna -->
                     <th style="width: 10%;">Severidad</th>
                     <th style="width: 20%;">Acción</th>
                     <th>Detalles</th>
@@ -78,7 +79,8 @@
                 </tr>
             </thead>
             <tbody>
-                {% for log in logs %}
+                <!-- CAMBIO: El bucle ahora desempaca el log y el usuario -->
+                {% for log, user in logs %}
                 <tr>
                     <td class="text-center">
                         {% if log.category == 'Autenticación' %}
@@ -101,6 +103,15 @@
                             <span class="badge badge-secondary">Sistema</span>
                         {% endif %}
                     </td>
+                    <!-- CAMBIO: Se añade la celda para el turno -->
+                    <td>
+                        {# Si el usuario existe y tiene un turno, muéstralo. Si no, muestra N/A. #}
+                        {% if user and user.turno %}
+                            {{ user.turno }}
+                        {% else %}
+                            <span class="text-muted">N/A</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if log.severity == 'Critical' %}
                             <span class="badge badge-danger">{{ log.severity }}</span>
@@ -116,7 +127,8 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="7" class="text-center">No hay registros de actividad que coincidan con los filtros aplicados.</td>
+                    <!-- CAMBIO: El colspan se aumenta a 8 -->
+                    <td colspan="8" class="text-center">No hay registros de actividad que coincidan con los filtros aplicados.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -124,15 +136,13 @@
     </div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Busca todas las celdas con la clase 'local-datetime'
     const dateCells = document.querySelectorAll('.local-datetime');
     dateCells.forEach(cell => {
-        // Obtiene la fecha UTC del atributo de datos
         const utcDateString = cell.dataset.utcDate;
-        
         if (utcDateString) {
             const date = new Date(utcDateString);
             const options = {
