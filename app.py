@@ -13,7 +13,7 @@ from flask_apscheduler import APScheduler
 
 # --- Importaciones de la Base de Datos y Correo ---
 from sqlalchemy import func, exc, extract
-from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, init_db, create_default_admin
+from database import db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, OutputData, SolicitudCorreccion, init_db, create_default_admin
 from mail_sender import send_email
 
 # --- Configurar locale para español (para nombres de meses y días) ---
@@ -88,8 +88,7 @@ def before_request_handler():
     session.permanent = True
 
 # --- Constantes y Funciones de Utilidad ---
-AREAS_IHP = ['Soporte', 'Cuerpos', 'Flechas', 'Misceláneos', 'Embobinado', 'ECC', 'ERF', 'Carga', 'Output']
-# CAMBIO: Se añade "Carga" al grupo FHP
+AREAS_IHP = ['Soporte', 'Servicio', 'Cuerpos', 'Flechas', 'Misceláneos', 'Embobinado', 'ECC', 'ERF', 'Carga', 'Output']
 AREAS_FHP = ['Rotores Inyección', 'Rotores ERF', 'Cuerpos', 'Flechas', 'Embobinado', 'Barniz', 'Soporte', 'Pintura', 'Carga', 'Output']
 HORAS_TURNO = { 'Turno A': ['10AM', '1PM', '4PM'], 'Turno B': ['7PM', '10PM', '12AM'], 'Turno C': ['3AM', '6AM'] }
 NOMBRES_TURNOS = list(HORAS_TURNO.keys())
@@ -173,11 +172,11 @@ def login():
             session['role'] = user.role
             session['nombre_completo'] = user.nombre_completo
             session['csrf_token'] = secrets.token_hex(16)
-            log_activity("Inicio de sesión", f"Usuario '{user.username}' (Rol: {user.role})", 'Sistema', 'Autenticación', 'Info')
+            log_activity("Inicio de sesión", f"Rol: {user.role}", 'Sistema', 'Autenticación', 'Info')
             db_session.commit()
             return redirect(url_for('dashboard'))
         else:
-            log_activity("Intento de inicio de sesión fallido", f"Usuario: '{username}'", 'Sistema', 'Seguridad', 'Warning')
+            log_activity("Intento de inicio de sesión fallido", f"Intento con usuario: '{username}'", 'Sistema', 'Seguridad', 'Warning')
             db_session.commit()
             flash('Usuario o contraseña incorrectos.', 'danger')
     if 'csrf_token' not in session: session['csrf_token'] = secrets.token_hex(16)
@@ -186,8 +185,7 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
-    username = session.get('username', 'Desconocido')
-    log_activity("Cierre de sesión", f"Usuario '{username}'", 'Sistema', 'Autenticación', 'Info')
+    log_activity("Cierre de sesión", "", 'Sistema', 'Autenticación', 'Info')
     db_session.commit()
     session.clear()
     flash('Has cerrado sesión correctamente.', 'info')
@@ -351,7 +349,35 @@ def dashboard_admin():
     
     global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
     heatmap_data = get_heatmap_data(selected_date)
-    latest_deviations = get_latest_deviations()
+    
+    # --- CAMBIO: Se obtiene una lista unificada de ítems pendientes ---
+    pending_items = []
+    # Obtener últimas 3 desviaciones no resueltas
+    pending_deviations = db_session.query(Pronostico).filter(
+        Pronostico.razon_desviacion.isnot(None),
+        Pronostico.razon_desviacion != '',
+        Pronostico.status != 'Resuelto'
+    ).order_by(Pronostico.fecha_razon.desc()).limit(3).all()
+    for d in pending_deviations:
+        pending_items.append({
+            'tipo': 'Desviación', 'timestamp': d.fecha_razon, 'grupo': d.grupo,
+            'area': d.area, 'turno': d.turno, 'detalles': d.razon_desviacion, 'usuario': d.usuario_razon
+        })
+
+    # Obtener últimas 3 solicitudes pendientes
+    pending_requests = db_session.query(SolicitudCorreccion).filter(
+        SolicitudCorreccion.status == 'Pendiente'
+    ).order_by(SolicitudCorreccion.timestamp.desc()).limit(3).all()
+    for s in pending_requests:
+         pending_items.append({
+            'tipo': f"Corrección ({s.tipo_error})", 'timestamp': s.timestamp, 'grupo': s.grupo,
+            'area': s.area, 'turno': s.turno, 'detalles': s.descripcion, 'usuario': s.usuario_solicitante
+        })
+
+    # Ordenar la lista combinada y tomar los 5 más recientes
+    pending_items.sort(key=lambda x: x['timestamp'], reverse=True)
+    latest_pending_items = pending_items[:5]
+    
     today = datetime.utcnow().date()
     
     if selected_date == today:
@@ -370,7 +396,7 @@ def dashboard_admin():
         ihp_data=ihp_data, 
         fhp_data=fhp_data, 
         heatmap_data=heatmap_data, 
-        latest_deviations=latest_deviations, 
+        latest_pending_items=latest_pending_items, # Se pasa la nueva lista
         nombres_turnos=NOMBRES_TURNOS,
         output_data_ihp=output_data_ihp,
         output_data_fhp=output_data_fhp
@@ -518,9 +544,17 @@ def captura(group):
         flash('No tienes permiso para capturar datos.', 'danger')
         return redirect(url_for('dashboard'))
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
+    
     if request.method == 'POST':
         selected_date_str = request.form.get('fecha')
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+        capture_date = datetime.utcnow().date()
+        
+        # CAMBIO: Se genera una nota de auditoría si las fechas no coinciden
+        audit_note = ""
+        if selected_date != capture_date:
+            audit_note = f" (Capturado el {capture_date.strftime('%Y-%m-%d')} para la fecha {selected_date_str})."
+
         now_dt = datetime.utcnow()
         changes_detected = False
         try:
@@ -530,6 +564,7 @@ def captura(group):
             pronosticos_map = {(p.area, p.turno): p for p in all_pronosticos}
             produccion_map = {(p.area, p.hora): p for p in all_produccion}
             non_output_areas = [a for a in areas_list if a != 'Output']
+            
             for area in non_output_areas:
                 area_slug = to_slug(area)
                 for turno in NOMBRES_TURNOS:
@@ -542,12 +577,17 @@ def captura(group):
                             if old_val != new_val:
                                 existing.valor_pronostico = new_val
                                 changes_detected = True
-                                log_activity("Modificación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor cambiado de {old_val} a {new_val}", group_upper, 'Datos', 'Info')
+                                # CAMBIO: Se añade la nota de auditoría al detalle
+                                details = f"Área: {area}, Turno: {turno}. Valor: {old_val} -> {new_val}.{audit_note}"
+                                log_activity("Modificación Pronóstico", details, group_upper, 'Datos', 'Info')
                         else:
                             new_entry = Pronostico(fecha=selected_date, grupo=group_upper, area=area, turno=turno, valor_pronostico=new_val)
                             db_session.add(new_entry)
                             changes_detected = True
-                            log_activity("Creación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor establecido: {new_val}", group_upper, 'Datos', 'Info')
+                            # CAMBIO: Se añade la nota de auditoría al detalle
+                            details = f"Área: {area}, Turno: {turno}. Valor: {new_val}.{audit_note}"
+                            log_activity("Creación Pronóstico", details, group_upper, 'Datos', 'Info')
+                
                 for hora in sum(HORAS_TURNO.values(), []):
                     new_val_str = request.form.get(f'produccion_{area_slug}_{hora}')
                     if new_val_str.isdigit():
@@ -560,12 +600,17 @@ def captura(group):
                                 existing.usuario_captura = session.get('username')
                                 existing.fecha_captura = now_dt
                                 changes_detected = True
-                                log_activity("Modificación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor cambiado de {old_val} a {new_val}", group_upper, 'Datos', 'Info')
+                                # CAMBIO: Se añade la nota de auditoría al detalle
+                                details = f"Área: {area}, Hora: {hora}. Valor: {old_val} -> {new_val}.{audit_note}"
+                                log_activity("Modificación Producción", details, group_upper, 'Datos', 'Info')
                         else:
                             new_entry = ProduccionCaptura(fecha=selected_date, grupo=group_upper, area=area, hora=hora, valor_producido=new_val, usuario_captura=session.get('username'), fecha_captura=now_dt)
                             db_session.add(new_entry)
                             changes_detected = True
-                            log_activity("Creación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor establecido: {new_val}", group_upper, 'Datos', 'Info')
+                            # CAMBIO: Se añade la nota de auditoría al detalle
+                            details = f"Área: {area}, Hora: {hora}. Valor: {new_val}.{audit_note}"
+                            log_activity("Creación Producción", details, group_upper, 'Datos', 'Info')
+            
             new_pron_out_str = request.form.get('pronostico_output')
             new_prod_out_str = request.form.get('produccion_output')
             if existing_output:
@@ -573,17 +618,24 @@ def captura(group):
                 old_prod = existing_output.output or 0
                 if new_pron_out_str.isdigit() and int(new_pron_out_str) != old_pron:
                     changes_detected = True
-                    log_activity("Modificación Output Pronóstico", f"Fecha:{selected_date_str}. Valor cambiado de {old_pron} a {new_pron_out_str}", group_upper, 'Datos', 'Info')
+                    # CAMBIO: Se añade la nota de auditoría al detalle
+                    details = f"Valor: {old_pron} -> {new_pron_out_str}.{audit_note}"
+                    log_activity("Modificación Output Pronóstico", details, group_upper, 'Datos', 'Info')
                     existing_output.pronostico = int(new_pron_out_str)
                 if new_prod_out_str.isdigit() and int(new_prod_out_str) != old_prod:
                     changes_detected = True
-                    log_activity("Modificación Output Producción", f"Fecha:{selected_date_str}. Valor cambiado de {old_prod} a {new_prod_out_str}", group_upper, 'Datos', 'Info')
+                    # CAMBIO: Se añade la nota de auditoría al detalle
+                    details = f"Valor: {old_prod} -> {new_prod_out_str}.{audit_note}"
+                    log_activity("Modificación Output Producción", details, group_upper, 'Datos', 'Info')
                     existing_output.output = int(new_prod_out_str)
             elif new_pron_out_str.isdigit() or new_prod_out_str.isdigit():
                 changes_detected = True
                 new_output = OutputData(fecha=selected_date, grupo=group_upper, pronostico=int(new_pron_out_str or 0), output=int(new_prod_out_str or 0), usuario_captura=session.get('username'), fecha_captura=now_dt)
                 db_session.add(new_output)
-                log_activity("Creación Output", f"Fecha:{selected_date_str}. Pronóstico: {new_pron_out_str}, Producción: {new_prod_out_str}", group_upper, 'Datos', 'Info')
+                # CAMBIO: Se añade la nota de auditoría al detalle
+                details = f"Pronóstico: {new_pron_out_str}, Producción: {new_prod_out_str}.{audit_note}"
+                log_activity("Creación Output", details, group_upper, 'Datos', 'Info')
+            
             db_session.commit()
             if changes_detected: flash('Cambios guardados y registrados exitosamente.', 'success')
             else: flash('No se detectaron cambios para guardar.', 'info')
@@ -611,13 +663,13 @@ def submit_reason():
             old_reason = pronostico_entry.razon_desviacion
             pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, datetime.utcnow()
             if old_reason != reason: 
-                log_activity("Registro de Razón", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
+                log_activity("Registro de Razón", f"Área: {area}, Turno: {turno_name}. Razón: '{reason}'", group, 'Datos', 'Warning')
             db_session.commit()
             return jsonify({'status': 'success', 'message': 'Razón guardada exitosamente.'})
         else:
             new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=datetime.utcnow())
             db_session.add(new_entry)
-            log_activity("Registro de Razón (Nuevo)", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
+            log_activity("Registro de Razón (Nuevo)", f"Área: {area}, Turno: {turno_name}. Razón: '{reason}'", group, 'Datos', 'Warning')
             db_session.commit()
             return jsonify({'status': 'success', 'message': 'Razón guardada exitosamente para un nuevo registro.'})
     except exc.SQLAlchemyError as e:
@@ -728,28 +780,85 @@ def export_excel(group):
     output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'produccion_{group_upper}_{selected_date}.xlsx')
 
-@app.route('/bandeja')
+
+@app.route('/centro_acciones')
 @login_required
 @role_required(['ADMIN'])
-def bandeja():
+def centro_acciones():
     if request.args.get('limpiar'):
-        session.pop('bandeja_filtros', None)
-        return redirect(url_for('bandeja'))
-    filtros = session.get('bandeja_filtros', {}) if not request.args else {'fecha_inicio': request.args.get('fecha_inicio'), 'fecha_fin': request.args.get('fecha_fin'), 'grupo': request.args.get('grupo'), 'area': request.args.get('area'), 'usuario': request.args.get('usuario'), 'status': request.args.get('status')}
-    session['bandeja_filtros'] = filtros
-    query = db_session.query(Pronostico).filter(Pronostico.razon_desviacion.isnot(None), Pronostico.razon_desviacion != '')
-    if filtros.get('fecha_inicio'): query = query.filter(Pronostico.fecha >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
-    if filtros.get('fecha_fin'): query = query.filter(Pronostico.fecha <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
-    if filtros.get('grupo') and filtros.get('grupo') != 'Todos': query = query.filter(Pronostico.grupo == filtros['grupo'])
-    if filtros.get('area'): query = query.filter(Pronostico.area.ilike(f"%{filtros['area']}%"))
-    if filtros.get('usuario'): query = query.filter(Pronostico.usuario_razon.ilike(f"%{filtros['usuario']}%"))
-    if filtros.get('status') and filtros.get('status') != 'Todos': query = query.filter(Pronostico.status == filtros['status'])
-    razones = query.order_by(Pronostico.fecha.desc(), Pronostico.grupo).all()
-    for razon in razones:
-        horas_del_turno = HORAS_TURNO.get(razon.turno, [])
-        producido_turno = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(ProduccionCaptura.fecha == razon.fecha, ProduccionCaptura.grupo == razon.grupo, ProduccionCaptura.area == razon.area, ProduccionCaptura.hora.in_(horas_del_turno)).scalar() or 0
-        razon.producido_turno = producido_turno
-    return render_template('bandeja.html', razones=razones, filtros=filtros)
+        session.pop('acciones_filtros', None)
+        return redirect(url_for('centro_acciones'))
+
+    filtros = session.get('acciones_filtros', {})
+    if request.method == 'GET' and any(arg in request.args for arg in ['fecha_inicio', 'fecha_fin', 'grupo', 'tipo', 'status']):
+        filtros = {
+            'fecha_inicio': request.args.get('fecha_inicio'),
+            'fecha_fin': request.args.get('fecha_fin'),
+            'grupo': request.args.get('grupo'),
+            'tipo': request.args.get('tipo', 'Todos'),
+            'status': request.args.get('status', 'Todos')
+        }
+        session['acciones_filtros'] = filtros
+    
+    items = []
+
+    if filtros.get('tipo', 'Todos') in ['Todos', 'Desviacion']:
+        query_desviaciones = db_session.query(Pronostico).filter(Pronostico.razon_desviacion.isnot(None), Pronostico.razon_desviacion != '')
+        if filtros.get('fecha_inicio'): query_desviaciones = query_desviaciones.filter(Pronostico.fecha >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
+        if filtros.get('fecha_fin'): query_desviaciones = query_desviaciones.filter(Pronostico.fecha <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
+        if filtros.get('grupo') and filtros.get('grupo') != 'Todos': query_desviaciones = query_desviaciones.filter(Pronostico.grupo == filtros['grupo'])
+        if filtros.get('status') and filtros.get('status') != 'Todos': query_desviaciones = query_desviaciones.filter(Pronostico.status == filtros['status'])
+        
+        for d in query_desviaciones.all():
+            items.append({
+                'id': d.id, 'tipo': 'Desviación', 'timestamp': d.fecha_razon, 'fecha_evento': d.fecha,
+                'grupo': d.grupo, 'area': d.area, 'turno': d.turno, 'usuario': d.usuario_razon,
+                'detalles': d.razon_desviacion, 'status': d.status
+            })
+
+    if filtros.get('tipo', 'Todos') in ['Todos', 'Correccion']:
+        query_solicitudes = db_session.query(SolicitudCorreccion)
+        if filtros.get('fecha_inicio'): query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
+        if filtros.get('fecha_fin'): query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
+        if filtros.get('grupo') and filtros.get('grupo') != 'Todos': query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.grupo == filtros['grupo'])
+        if filtros.get('status') and filtros.get('status') != 'Todos': query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.status == filtros['status'])
+
+        for s in query_solicitudes.all():
+            items.append({
+                'id': s.id, 'tipo': f"Corrección ({s.tipo_error})", 'timestamp': s.timestamp, 'fecha_evento': s.fecha_problema,
+                'grupo': s.grupo, 'area': s.area, 'turno': s.turno, 'usuario': s.usuario_solicitante,
+                'detalles': s.descripcion, 'status': s.status
+            })
+
+    items.sort(key=lambda x: x['timestamp'] if x['timestamp'] else datetime.min, reverse=True)
+
+    return render_template('centro_acciones.html', items=items, filtros=filtros)
+
+
+@app.route('/solicitar_correccion', methods=['POST'])
+@login_required
+@csrf_required
+def solicitar_correccion():
+    try:
+        nueva_solicitud = SolicitudCorreccion(
+            usuario_solicitante=session.get('username'),
+            fecha_problema=datetime.strptime(request.form.get('fecha_problema'), '%Y-%m-%d').date(),
+            grupo=request.form.get('grupo'),
+            area=request.form.get('area'),
+            turno=request.form.get('turno'),
+            tipo_error=request.form.get('tipo_error'),
+            descripcion=request.form.get('descripcion')
+        )
+        db_session.add(nueva_solicitud)
+        log_activity(f"Solicitud Corrección ({request.form.get('tipo_error')})", 
+                     f"Área: {request.form.get('area')}, Turno: {request.form.get('turno')}. Fecha: {request.form.get('fecha_problema')}", 
+                     request.form.get('grupo'), 'Datos', 'Warning')
+        db_session.commit()
+        return jsonify({'status': 'success', 'message': 'Tu solicitud de corrección ha sido enviada. Un administrador la revisará pronto.'})
+    except Exception as e:
+        db_session.rollback()
+        print(f"Error al crear solicitud de corrección: {e}")
+        return jsonify({'status': 'error', 'message': f'Ocurrió un error al enviar tu solicitud: {e}'}), 500
 
 @app.route('/update_reason_status/<int:reason_id>', methods=['POST'])
 @login_required
@@ -761,12 +870,31 @@ def update_reason_status(reason_id):
     if reason and new_status:
         old_status = reason.status
         reason.status = new_status
-        log_activity("Cambio de Estado de Razón", f"ID Razón: {reason.id}. Estado cambiado de '{old_status}' a '{new_status}'.", reason.grupo, 'Datos', 'Info')
+        log_activity("Cambio Estado (Desviación)", f"ID Razón: {reason.id}. Estado: '{old_status}' -> '{new_status}'.", reason.grupo, 'Datos', 'Info')
         db_session.commit()
         flash(f"El estado de la razón ha sido actualizado a '{new_status}'.", 'success')
     else:
         flash("No se pudo actualizar el estado de la razón.", 'danger')
-    return redirect(url_for('bandeja'))
+    return redirect(url_for('centro_acciones'))
+
+
+@app.route('/update_solicitud_status/<int:solicitud_id>', methods=['POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def update_solicitud_status(solicitud_id):
+    solicitud = db_session.query(SolicitudCorreccion).get(solicitud_id)
+    if solicitud:
+        solicitud.status = request.form.get('status')
+        solicitud.admin_username = session.get('username')
+        solicitud.admin_notas = request.form.get('admin_notas')
+        solicitud.fecha_resolucion = datetime.utcnow()
+        log_activity("Cambio Estado (Corrección)", f"ID Solicitud: {solicitud.id}. Estado: '{solicitud.status}' -> '{request.form.get('status')}'.", solicitud.grupo, 'Datos', 'Info')
+        db_session.commit()
+        flash('El estado de la solicitud ha sido actualizado.', 'success')
+    else:
+        flash('No se encontró la solicitud especificada.', 'danger')
+    return redirect(url_for('centro_acciones'))
 
 @app.route('/manage_users', methods=['GET', 'POST'])
 @login_required
@@ -783,14 +911,14 @@ def manage_users():
             cargo = request.form.get('cargo')
             turno = request.form.get('turno') 
             if not all([username, password, role, nombre_completo, cargo]):
-                flash('Todos los campos para crear un usuario son obligatorios.', 'warning')
+                flash('Todos los campos son obligatorios.', 'warning')
             else:
                 if db_session.query(Usuario).filter_by(username=username).first():
                     flash(f"El nombre de usuario '{username}' ya existe.", 'danger')
                 else:
                     new_user = Usuario(username=username, password=password, role=role, nombre_completo=nombre_completo, cargo=cargo, turno=turno)
                     db_session.add(new_user)
-                    log_activity("Creación de usuario", f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 'ADMIN', 'Seguridad', 'Info')
+                    log_activity("Creación de usuario", f"Usuario '{username}' ({nombre_completo}) creado con rol '{role}'.", 'ADMIN', 'Seguridad', 'Info')
                     db_session.commit()
                     flash(f"Usuario '{username}' creado exitosamente.", 'success')
             return redirect(url_for('manage_users'))
@@ -845,7 +973,7 @@ def edit_user(user_id):
         if password:
             user.password_hash = generate_password_hash(password)
         try:
-            log_activity("Edición de usuario", f"Admin '{session.get('username')}' editó al usuario ID {user.id} ({user.username}).", 'ADMIN', 'Seguridad', 'Warning')
+            log_activity("Edición de usuario", f"Datos del usuario ID {user.id} ({user.username}) actualizados.", 'ADMIN', 'Seguridad', 'Warning')
             db_session.commit()
             flash('Usuario actualizado correctamente.', 'success')
             return redirect(url_for('manage_users'))
@@ -865,7 +993,7 @@ def delete_user(user_id):
     user_to_delete = db_session.query(Usuario).filter_by(id=user_id).first()
     if user_to_delete:
         username_to_delete = user_to_delete.username
-        log_activity("Eliminación de usuario", f"Admin '{session.get('username')}' eliminó al usuario '{username_to_delete}'.", 'ADMIN', 'Seguridad', 'Critical')
+        log_activity("Eliminación de usuario", f"Usuario '{username_to_delete}' (ID: {user_id}) fue eliminado.", 'ADMIN', 'Seguridad', 'Critical')
         db_session.delete(user_to_delete)
         db_session.commit()
         flash('Usuario eliminado exitosamente.', 'success')
@@ -891,7 +1019,7 @@ def activity_log():
     }
     session['log_filtros'] = filtros
     
-    query = db_session.query(ActivityLog)
+    query = db_session.query(ActivityLog, Usuario).outerjoin(Usuario, ActivityLog.username == Usuario.username)
     
     if filtros.get('fecha_inicio'): query = query.filter(ActivityLog.timestamp >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d'))
     if filtros.get('fecha_fin'): 

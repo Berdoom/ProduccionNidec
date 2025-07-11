@@ -73,7 +73,6 @@ class Pronostico(Base):
     valor_pronostico = Column(Integer)
     razon_desviacion = Column(Text)
     usuario_razon = Column(String(80))
-    # CAMBIO: Usar UTC para la hora de la razón
     fecha_razon = Column(DateTime)
     status = Column(String(50), default='Nuevo', index=True)
 
@@ -86,13 +85,11 @@ class ProduccionCaptura(Base):
     hora = Column(String(10), nullable=False)
     valor_producido = Column(Integer)
     usuario_captura = Column(String(80))
-    # CAMBIO: Usar UTC para la hora de captura
     fecha_captura = Column(DateTime, default=datetime.utcnow)
 
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'
     id = Column(Integer, primary_key=True)
-    # CAMBIO: Usar UTC para el timestamp del log
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     username = Column(String(80), index=True)
     action = Column(String(255))
@@ -110,8 +107,23 @@ class OutputData(Base):
     pronostico = Column(Integer)
     output = Column(Integer)
     usuario_captura = Column(String(80))
-    # CAMBIO: Usar UTC para la hora de captura
     fecha_captura = Column(DateTime, default=datetime.utcnow)
+
+class SolicitudCorreccion(Base):
+    __tablename__ = 'solicitudes_correccion'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    usuario_solicitante = Column(String(80), nullable=False)
+    fecha_problema = Column(Date, nullable=False)
+    grupo = Column(String(10), nullable=False)
+    area = Column(String(50))
+    turno = Column(String(20))
+    tipo_error = Column(String(100), nullable=False)
+    descripcion = Column(Text, nullable=False)
+    status = Column(String(50), default='Pendiente', index=True)
+    admin_username = Column(String(80))
+    fecha_resolucion = Column(DateTime)
+    admin_notas = Column(Text)
 
 def init_db():
     print("Verificando y creando tablas si es necesario...")
