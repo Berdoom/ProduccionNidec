@@ -11,6 +11,7 @@
     --white: #ffffff;
     --text-dark: #212529;
     --text-muted: #6c757d;
+    --border-color: #dee2e6;
 }
 
 body {
@@ -129,6 +130,12 @@ tr.status-resuelto .custom-select {
     z-index: 1055;
 }
 
+/* --- CAMBIO: Contenedor del botón de guardado --- */
+.save-button-container {
+    text-align: center;
+    margin-top: 2rem;
+}
+
 /* =================================================================
    ESTILOS PARA ACORDEÓN RESPONSIVE (CELULAR) 
 ================================================================= */
@@ -136,8 +143,8 @@ tr.status-resuelto .custom-select {
     display: none;
 }
 
-@media (max-width: 992px) {
-    .table-responsive.desktop-only {
+@media (max-width: 768px) {
+    .table-responsive.desktop-only, .dashboard-table {
         display: none;
     }
     .accordion-responsive {
@@ -146,14 +153,14 @@ tr.status-resuelto .custom-select {
     .accordion-responsive .card,
     #registroAccordion .card {
         margin-bottom: 10px;
-        border: 1px solid #ddd;
+        border: 1px solid var(--border-color);
         border-radius: 8px;
     }
     .accordion-responsive .card-header,
     #registroAccordion .card-header {
         background-color: var(--nidec-green-light);
         padding: 0;
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--border-color);
     }
     .accordion-responsive .card-header button,
     #registroAccordion .card-header button {
@@ -206,7 +213,7 @@ tr.status-resuelto .custom-select {
         flex-shrink: 0;
         padding: 6px;
         text-align: center;
-        border: 1px solid #ced4da;
+        border: 1px solid var(--border-color);
         border-radius: 6px;
     }
     .list-group-item.turno-header {
@@ -214,6 +221,29 @@ tr.status-resuelto .custom-select {
         font-weight: bold;
         color: var(--text-dark);
         justify-content: center;
+    }
+
+    /* --- CAMBIO: Estilos para el botón de guardado fijo en móvil --- */
+    .save-button-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(255, 255, 255, 0.98);
+        padding: 1rem;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        z-index: 1000;
+        margin-top: 0;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .save-button-container .btn {
+        width: 100%;
+    }
+
+    /* Añade espacio en la parte inferior para que el contenido no quede oculto */
+    main.container-fluid {
+        padding-bottom: 100px;
     }
 }
 
@@ -235,3 +265,56 @@ tr.status-resuelto .custom-select {
 .heatmap-warning { background-color: #fff3cd; }
 .heatmap-success { background-color: #d4edda; }
 .heatmap-excellent { background-color: #a3e9b3; }
+
+/* --- Estilos para la tabla del Dashboard de Grupo --- */
+.dashboard-table {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    overflow: hidden;
+}
+
+.dashboard-table thead th {
+    background-color: #f8f9fa;
+    color: #343a40;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+.dashboard-table thead th:first-child {
+    text-align: left;
+}
+
+.dashboard-table tbody td {
+    border-top: 1px solid var(--border-color);
+    padding: 0.75rem;
+    vertical-align: middle;
+}
+
+.dashboard-table tbody tr:first-child td {
+    border-top: none;
+}
+
+.dashboard-table .area-header {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.dashboard-table .output-row {
+    background-color: var(--nidec-green-light);
+    font-weight: 600;
+}
+
+.dashboard-table .output-row td {
+    color: var(--nidec-green-dark);
+}
+
+.dashboard-table .font-weight-bold {
+    font-weight: 600 !important;
+}
