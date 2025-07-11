@@ -35,9 +35,9 @@ scheduler = APScheduler()
 
 def check_and_send_notifications():
     with app.app_context():
-        print(f"[{datetime.now()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
-        today = datetime.now().date()
-        now = datetime.now()
+        print(f"[{datetime.utcnow()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
+        today = datetime.utcnow().date()
+        now = datetime.utcnow()
         missing_entries = []
         all_areas = list(set([a for a in AREAS_IHP if a != 'Output'] + [a for a in AREAS_FHP if a != 'Output']))
         for turno, horas in HORAS_TURNO.items():
@@ -56,13 +56,13 @@ def check_and_send_notifications():
         if missing_entries:
             print(f"¡Se encontraron {len(missing_entries)} registros faltantes! Preparando para enviar correo.")
             recipient = os.getenv('MAIL_RECIPIENT')
-            subject = f"Alerta: Faltan Registros de Producción ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+            subject = f"Alerta: Faltan Registros de Producción ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC)"
             body_html = "<p>Se ha detectado que los siguientes registros de producción no han sido capturados a tiempo:</p><ul>"
             for item in missing_entries: body_html += f"<li>{item}</li>"
             body_html += "</ul><p>Por favor, acceda al sistema para completar la información.</p>"
             send_email(recipient, subject, body_html)
         else:
-            print(f"[{datetime.now()}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
+            print(f"[{datetime.utcnow()}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
 
 # --- INICIALIZACIÓN DE LA BASE DE DATOS Y DEL PROGRAMADOR ---
 print("INICIANDO APLICACIÓN FLASK...")
@@ -107,7 +107,7 @@ app.jinja_env.filters['month_name'] = get_month_name
 def log_activity(action, details="", area_grupo=None, category="General", severity="Info"):
     try:
         log_entry = ActivityLog(
-            timestamp=datetime.now(),
+            timestamp=datetime.utcnow(),
             username=session.get('username', 'Sistema'),
             action=action,
             details=details,
@@ -333,11 +333,11 @@ app.jinja_env.filters['heatmap_color'] = get_heatmap_color_class
 @login_required
 @role_required(['ADMIN'])
 def dashboard_admin():
-    selected_date_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
-        selected_date = datetime.now().date()
+        selected_date = datetime.utcnow().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
         flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
     
@@ -351,7 +351,7 @@ def dashboard_admin():
     global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
     heatmap_data = get_heatmap_data(selected_date)
     latest_deviations = get_latest_deviations()
-    today = datetime.now().date()
+    today = datetime.utcnow().date()
     
     if selected_date == today:
         period_label = f"Hoy ({selected_date_str})"
@@ -384,8 +384,8 @@ def dashboard_group(group):
         flash('No tienes permiso para ver este dashboard.', 'danger')
         return redirect(url_for('dashboard'))
     
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = datetime.utcnow().strftime('%Y-%m-%d')
+    yesterday_str = (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%d')
     
     summary_today = get_group_performance(group_upper, today_str)
     summary_yesterday = get_group_performance(group_upper, yesterday_str)
@@ -420,7 +420,7 @@ def registro(group):
         flash('No tienes permiso para ver este registro.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
+    selected_date = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
     
     production_data = get_performance_data_from_db(group_upper, selected_date)
@@ -464,7 +464,7 @@ def reportes():
     default_group = user_role if user_role in ['IHP', 'FHP'] else 'IHP'
     group = request.args.get('group', default_group)
     if not is_admin: group = user_role
-    today = datetime.now()
+    today = datetime.utcnow()
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
     efficiency_data = {'labels': [], 'data': []}
@@ -520,7 +520,7 @@ def captura(group):
     if request.method == 'POST':
         selected_date_str = request.form.get('fecha')
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
-        now_dt = datetime.now()
+        now_dt = datetime.utcnow()
         changes_detected = False
         try:
             all_pronosticos = db_session.query(Pronostico).filter_by(fecha=selected_date, grupo=group_upper).all()
@@ -591,7 +591,7 @@ def captura(group):
             flash(f"Error al guardar en la base de datos: {e}", 'danger')
         return redirect(url_for('captura', group=group, fecha=selected_date_str))
         
-    selected_date_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     data_for_template = get_structured_capture_data(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date_str)
@@ -608,13 +608,13 @@ def submit_reason():
         pronostico_entry = db_session.query(Pronostico).filter_by(fecha=date_obj, grupo=group, area=area, turno=turno_name).first()
         if pronostico_entry:
             old_reason = pronostico_entry.razon_desviacion
-            pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, datetime.now()
+            pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, datetime.utcnow()
             if old_reason != reason: 
                 log_activity("Registro de Razón", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
             db_session.commit()
             return jsonify({'status': 'success', 'message': 'Razón guardada exitosamente.'})
         else:
-            new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=datetime.now())
+            new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=datetime.utcnow())
             db_session.add(new_entry)
             log_activity("Registro de Razón (Nuevo)", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
             db_session.commit()
@@ -634,7 +634,7 @@ def export_excel(group):
         flash('No tienes permiso para exportar estos datos.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
+    selected_date = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
     production_data = get_performance_data_from_db(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date)
     meta_produccion = 879
@@ -772,7 +772,6 @@ def update_reason_status(reason_id):
 @role_required(['ADMIN'])
 @csrf_required
 def manage_users():
-    # --- Lógica de creación de usuario ---
     if request.method == 'POST':
         form_type = request.form.get('form_type')
         if form_type == 'create_user':
@@ -782,7 +781,6 @@ def manage_users():
             nombre_completo = request.form.get('nombre_completo')
             cargo = request.form.get('cargo')
             turno = request.form.get('turno') 
-            
             if not all([username, password, role, nombre_completo, cargo]):
                 flash('Todos los campos para crear un usuario son obligatorios.', 'warning')
             else:
@@ -795,12 +793,9 @@ def manage_users():
                     db_session.commit()
                     flash(f"Usuario '{username}' creado exitosamente.", 'success')
             return redirect(url_for('manage_users'))
-
-    # --- Lógica de filtrado de usuarios ---
     if request.args.get('limpiar'):
         session.pop('user_filtros', None)
         return redirect(url_for('manage_users'))
-
     filtros = {}
     if request.method == 'GET' and any(arg in request.args for arg in ['username', 'nombre_completo', 'role', 'turno']):
         filtros = {
@@ -812,7 +807,6 @@ def manage_users():
         session['user_filtros'] = filtros
     elif 'user_filtros' in session:
         filtros = session.get('user_filtros', {})
-    
     query = db_session.query(Usuario)
     if filtros.get('username'):
         query = query.filter(Usuario.username.ilike(f"%{filtros['username']}%"))
@@ -825,43 +819,6 @@ def manage_users():
              query = query.filter((Usuario.turno == None) | (Usuario.turno == ''))
         else:
             query = query.filter(Usuario.turno == filtros['turno'])
-
-    users = query.order_by(Usuario.id).all()
-    
-    # --- LÍNEA CORREGIDA ---
-    # Ahora pasamos la variable 'filtros' a la plantilla.
-    return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS, filtros=filtros)
-
-    # --- Lógica de filtrado de usuarios ---
-    if request.args.get('limpiar'):
-        session.pop('user_filtros', None)
-        return redirect(url_for('manage_users'))
-
-    filtros = {}
-    if request.method == 'GET' and any(arg in request.args for arg in ['username', 'nombre_completo', 'role', 'turno']):
-        filtros = {
-            'username': request.args.get('username', ''),
-            'nombre_completo': request.args.get('nombre_completo', ''),
-            'role': request.args.get('role', ''),
-            'turno': request.args.get('turno', '')
-        }
-        session['user_filtros'] = filtros
-    elif 'user_filtros' in session:
-        filtros = session.get('user_filtros', {})
-    
-    query = db_session.query(Usuario)
-    if filtros.get('username'):
-        query = query.filter(Usuario.username.ilike(f"%{filtros['username']}%"))
-    if filtros.get('nombre_completo'):
-        query = query.filter(Usuario.nombre_completo.ilike(f"%{filtros['nombre_completo']}%"))
-    if filtros.get('role') and filtros.get('role') != 'Todos':
-        query = query.filter(Usuario.role == filtros['role'])
-    if filtros.get('turno') and filtros.get('turno') != 'Todos':
-        if filtros.get('turno') == 'N/A':
-             query = query.filter((Usuario.turno == None) | (Usuario.turno == ''))
-        else:
-            query = query.filter(Usuario.turno == filtros['turno'])
-
     users = query.order_by(Usuario.id).all()
     return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS, filtros=filtros)
 
@@ -875,21 +832,17 @@ def edit_user(user_id):
         abort(404)
     if request.method == 'POST':
         new_username = request.form.get('username')
-        # Verificar unicidad del nuevo username si ha cambiado
         if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first():
             flash(f"El nombre de usuario '{new_username}' ya existe.", 'danger')
             return render_template('edit_user.html', user=user, nombres_turnos=NOMBRES_TURNOS)
-        
         user.username = new_username
         user.nombre_completo = request.form.get('nombre_completo')
         user.cargo = request.form.get('cargo')
         user.role = request.form.get('role')
         user.turno = request.form.get('turno')
-
         password = request.form.get('password')
         if password:
             user.password_hash = generate_password_hash(password)
-
         try:
             log_activity("Edición de usuario", f"Admin '{session.get('username')}' editó al usuario ID {user.id} ({user.username}).", 'ADMIN', 'Seguridad', 'Warning')
             db_session.commit()
@@ -898,9 +851,7 @@ def edit_user(user_id):
         except exc.IntegrityError:
             db_session.rollback()
             flash(f"Error: El nombre de usuario '{new_username}' ya está en uso.", 'danger')
-
     return render_template('edit_user.html', user=user, nombres_turnos=NOMBRES_TURNOS)
-
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @login_required

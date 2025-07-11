@@ -15,12 +15,25 @@ if not DATABASE_URL:
     if os.getenv('RENDER'):
         print("FATAL ERROR: La variable de entorno DATABASE_URL no está definida en el entorno de Render.", file=sys.stderr)
         sys.exit(1)
+    else:
+        print("ADVERTENCIA: La variable de entorno DATABASE_URL no fue encontrada.")
+        try:
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            instance_path = os.path.join(project_root, 'instance')
+            os.makedirs(instance_path, exist_ok=True)
+            db_path = os.path.join(instance_path, 'produccion.db')
+            DATABASE_URL = f'sqlite:///{db_path}'
+            print(f"Usando una base de datos SQLite local por defecto en: '{db_path}'")
+        except Exception as e:
+            print(f"FATAL ERROR: No se pudo crear la ruta para la base de datos local: {e}", file=sys.stderr)
+            sys.exit(1)
 
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     print("Configurando conexión a la base de datos PostgreSQL de producción...")
 else:
-    print(f"Configurando conexión a la base de datos local: {DATABASE_URL.split('///')[0]}...")
+    db_type = DATABASE_URL.split(':')[0]
+    print(f"Configurando conexión a la base de datos local del tipo: {db_type}...")
 
 try:
     engine = create_engine(DATABASE_URL)
@@ -60,6 +73,7 @@ class Pronostico(Base):
     valor_pronostico = Column(Integer)
     razon_desviacion = Column(Text)
     usuario_razon = Column(String(80))
+    # CAMBIO: Usar UTC para la hora de la razón
     fecha_razon = Column(DateTime)
     status = Column(String(50), default='Nuevo', index=True)
 
@@ -72,20 +86,21 @@ class ProduccionCaptura(Base):
     hora = Column(String(10), nullable=False)
     valor_producido = Column(Integer)
     usuario_captura = Column(String(80))
-    fecha_captura = Column(DateTime, default=datetime.now)
+    # CAMBIO: Usar UTC para la hora de captura
+    fecha_captura = Column(DateTime, default=datetime.utcnow)
 
-# CAMBIO: Se añaden columnas para mejorar el log
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'
     id = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime, default=datetime.now, index=True)
+    # CAMBIO: Usar UTC para el timestamp del log
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     username = Column(String(80), index=True)
     action = Column(String(255))
     details = Column(Text)
     area_grupo = Column(String(50), index=True)
-    ip_address = Column(String(45)) # Para IPv4 e IPv6
-    category = Column(String(50)) # Ej: Autenticación, Datos, Seguridad
-    severity = Column(String(20)) # Ej: Info, Warning, Critical
+    ip_address = Column(String(45))
+    category = Column(String(50))
+    severity = Column(String(20))
 
 class OutputData(Base):
     __tablename__ = 'output_data'
@@ -95,18 +110,15 @@ class OutputData(Base):
     pronostico = Column(Integer)
     output = Column(Integer)
     usuario_captura = Column(String(80))
-    fecha_captura = Column(DateTime, default=datetime.now)
+    # CAMBIO: Usar UTC para la hora de captura
+    fecha_captura = Column(DateTime, default=datetime.utcnow)
 
 def init_db():
     print("Verificando y creando tablas si es necesario...")
     try:
         Base.metadata.create_all(bind=engine)
         print("Verificación de tablas completada exitosamente.")
-
-        # Lógica de migración para añadir columnas faltantes
         inspector = inspect(engine)
-        
-        # Migración para la tabla 'usuarios'
         user_columns = [c['name'] for c in inspector.get_columns('usuarios')]
         if 'turno' not in user_columns:
             print("ADVERTENCIA: La columna 'turno' no se encontró. Añadiéndola...")
@@ -114,8 +126,6 @@ def init_db():
                 connection.execute(text('ALTER TABLE usuarios ADD COLUMN turno VARCHAR(20)'))
                 connection.commit()
             print("Columna 'turno' añadida exitosamente.")
-
-        # Migración para la tabla 'activity_logs'
         log_columns = [c['name'] for c in inspector.get_columns('activity_logs')]
         new_log_cols = {'ip_address': 'VARCHAR(45)', 'category': 'VARCHAR(50)', 'severity': 'VARCHAR(20)'}
         for col, col_type in new_log_cols.items():
@@ -125,7 +135,6 @@ def init_db():
                     connection.execute(text(f'ALTER TABLE activity_logs ADD COLUMN {col} {col_type}'))
                     connection.commit()
                 print(f"Columna '{col}' añadida exitosamente.")
-
     except OperationalError as e:
         print(f"ERROR OPERACIONAL al inicializar la base de datos: {e}", file=sys.stderr)
     except Exception as e:
