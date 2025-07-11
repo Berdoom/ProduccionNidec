@@ -772,29 +772,135 @@ def update_reason_status(reason_id):
 @role_required(['ADMIN'])
 @csrf_required
 def manage_users():
+    # --- Lógica de creación de usuario ---
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        role = request.form.get('role')
-        nombre_completo = request.form.get('nombre_completo')
-        cargo = request.form.get('cargo')
-        turno = request.form.get('turno') 
-        
-        if not all([username, password, role, nombre_completo, cargo]):
-            flash('Todos los campos son obligatorios.', 'warning')
-        else:
-            if db_session.query(Usuario).filter_by(username=username).first():
-                flash(f"El nombre de usuario '{username}' ya existe.", 'danger')
+        form_type = request.form.get('form_type')
+        if form_type == 'create_user':
+            username = request.form.get('username')
+            password = request.form.get('password')
+            role = request.form.get('role')
+            nombre_completo = request.form.get('nombre_completo')
+            cargo = request.form.get('cargo')
+            turno = request.form.get('turno') 
+            
+            if not all([username, password, role, nombre_completo, cargo]):
+                flash('Todos los campos para crear un usuario son obligatorios.', 'warning')
             else:
-                new_user = Usuario(username=username, password=password, role=role, nombre_completo=nombre_completo, cargo=cargo, turno=turno)
-                db_session.add(new_user)
-                log_activity("Creación de usuario", f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 'ADMIN', 'Seguridad', 'Info')
-                db_session.commit()
-                flash(f"Usuario '{username}' creado exitosamente.", 'success')
+                if db_session.query(Usuario).filter_by(username=username).first():
+                    flash(f"El nombre de usuario '{username}' ya existe.", 'danger')
+                else:
+                    new_user = Usuario(username=username, password=password, role=role, nombre_completo=nombre_completo, cargo=cargo, turno=turno)
+                    db_session.add(new_user)
+                    log_activity("Creación de usuario", f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 'ADMIN', 'Seguridad', 'Info')
+                    db_session.commit()
+                    flash(f"Usuario '{username}' creado exitosamente.", 'success')
+            return redirect(url_for('manage_users'))
+
+    # --- Lógica de filtrado de usuarios ---
+    if request.args.get('limpiar'):
+        session.pop('user_filtros', None)
         return redirect(url_for('manage_users'))
+
+    filtros = {}
+    if request.method == 'GET' and any(arg in request.args for arg in ['username', 'nombre_completo', 'role', 'turno']):
+        filtros = {
+            'username': request.args.get('username', ''),
+            'nombre_completo': request.args.get('nombre_completo', ''),
+            'role': request.args.get('role', ''),
+            'turno': request.args.get('turno', '')
+        }
+        session['user_filtros'] = filtros
+    elif 'user_filtros' in session:
+        filtros = session.get('user_filtros', {})
     
-    users = db_session.query(Usuario).order_by(Usuario.id).all()
-    return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS)
+    query = db_session.query(Usuario)
+    if filtros.get('username'):
+        query = query.filter(Usuario.username.ilike(f"%{filtros['username']}%"))
+    if filtros.get('nombre_completo'):
+        query = query.filter(Usuario.nombre_completo.ilike(f"%{filtros['nombre_completo']}%"))
+    if filtros.get('role') and filtros.get('role') != 'Todos':
+        query = query.filter(Usuario.role == filtros['role'])
+    if filtros.get('turno') and filtros.get('turno') != 'Todos':
+        if filtros.get('turno') == 'N/A':
+             query = query.filter((Usuario.turno == None) | (Usuario.turno == ''))
+        else:
+            query = query.filter(Usuario.turno == filtros['turno'])
+
+    users = query.order_by(Usuario.id).all()
+    
+    # --- LÍNEA CORREGIDA ---
+    # Ahora pasamos la variable 'filtros' a la plantilla.
+    return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS, filtros=filtros)
+
+    # --- Lógica de filtrado de usuarios ---
+    if request.args.get('limpiar'):
+        session.pop('user_filtros', None)
+        return redirect(url_for('manage_users'))
+
+    filtros = {}
+    if request.method == 'GET' and any(arg in request.args for arg in ['username', 'nombre_completo', 'role', 'turno']):
+        filtros = {
+            'username': request.args.get('username', ''),
+            'nombre_completo': request.args.get('nombre_completo', ''),
+            'role': request.args.get('role', ''),
+            'turno': request.args.get('turno', '')
+        }
+        session['user_filtros'] = filtros
+    elif 'user_filtros' in session:
+        filtros = session.get('user_filtros', {})
+    
+    query = db_session.query(Usuario)
+    if filtros.get('username'):
+        query = query.filter(Usuario.username.ilike(f"%{filtros['username']}%"))
+    if filtros.get('nombre_completo'):
+        query = query.filter(Usuario.nombre_completo.ilike(f"%{filtros['nombre_completo']}%"))
+    if filtros.get('role') and filtros.get('role') != 'Todos':
+        query = query.filter(Usuario.role == filtros['role'])
+    if filtros.get('turno') and filtros.get('turno') != 'Todos':
+        if filtros.get('turno') == 'N/A':
+             query = query.filter((Usuario.turno == None) | (Usuario.turno == ''))
+        else:
+            query = query.filter(Usuario.turno == filtros['turno'])
+
+    users = query.order_by(Usuario.id).all()
+    return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS, filtros=filtros)
+
+@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def edit_user(user_id):
+    user = db_session.query(Usuario).get(user_id)
+    if not user:
+        abort(404)
+    if request.method == 'POST':
+        new_username = request.form.get('username')
+        # Verificar unicidad del nuevo username si ha cambiado
+        if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first():
+            flash(f"El nombre de usuario '{new_username}' ya existe.", 'danger')
+            return render_template('edit_user.html', user=user, nombres_turnos=NOMBRES_TURNOS)
+        
+        user.username = new_username
+        user.nombre_completo = request.form.get('nombre_completo')
+        user.cargo = request.form.get('cargo')
+        user.role = request.form.get('role')
+        user.turno = request.form.get('turno')
+
+        password = request.form.get('password')
+        if password:
+            user.password_hash = generate_password_hash(password)
+
+        try:
+            log_activity("Edición de usuario", f"Admin '{session.get('username')}' editó al usuario ID {user.id} ({user.username}).", 'ADMIN', 'Seguridad', 'Warning')
+            db_session.commit()
+            flash('Usuario actualizado correctamente.', 'success')
+            return redirect(url_for('manage_users'))
+        except exc.IntegrityError:
+            db_session.rollback()
+            flash(f"Error: El nombre de usuario '{new_username}' ya está en uso.", 'danger')
+
+    return render_template('edit_user.html', user=user, nombres_turnos=NOMBRES_TURNOS)
+
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @login_required
