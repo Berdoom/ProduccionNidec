@@ -88,8 +88,9 @@ def before_request_handler():
     session.permanent = True
 
 # --- Constantes y Funciones de Utilidad ---
-AREAS_IHP = ['Soporte', 'Cuerpos', 'Misceláneos', 'Embobinado', 'ECC', 'ERF', 'Carga', 'Output']
-AREAS_FHP = ['Rotores Inyección', 'Rotores ERF', 'Cuerpos', 'Flechas', 'Embobinado', 'Barniz', 'Soporte', 'Pintura', 'Output']
+AREAS_IHP = ['Soporte', 'Cuerpos', 'Flechas', 'Misceláneos', 'Embobinado', 'ECC', 'ERF', 'Carga', 'Output']
+# CAMBIO: Se añade "Carga" al grupo FHP
+AREAS_FHP = ['Rotores Inyección', 'Rotores ERF', 'Cuerpos', 'Flechas', 'Embobinado', 'Barniz', 'Soporte', 'Pintura', 'Carga', 'Output']
 HORAS_TURNO = { 'Turno A': ['10AM', '1PM', '4PM'], 'Turno B': ['7PM', '10PM', '12AM'], 'Turno C': ['3AM', '6AM'] }
 NOMBRES_TURNOS = list(HORAS_TURNO.keys())
 
