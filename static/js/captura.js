@@ -1,4 +1,4 @@
-// Variable global para almacenar el estado inicial de la página al cargarla.
+// Variable global para almacenar el estado de las razones ya enviadas.
 let initialTurnState = {};
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,10 +7,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const productionForm = document.getElementById('productionForm');
 
     if (productionForm) {
+        // Cualquier entrada en el formulario marca que hay cambios sin guardar.
         productionForm.addEventListener('input', () => { hasUnsavedChanges = true; });
+        // Al enviar el formulario, se resetea la bandera.
         productionForm.addEventListener('submit', () => { hasUnsavedChanges = false; });
     }
 
+    // Muestra una advertencia al intentar salir de la página si hay cambios.
     window.addEventListener('beforeunload', (e) => {
         if (hasUnsavedChanges) {
             e.preventDefault();
@@ -18,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Pre-cálculo del estado inicial ---
+    // --- Pre-cálculo del estado inicial (para saber si ya existe una razón) ---
     const areas = Object.keys(PRONOSTICOS_DATA_JS);
     areas.forEach(areaName => {
         const areaSlug = toSlug(areaName);
@@ -27,36 +30,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         turnos.forEach(turnoName => {
             const turnoData = PRONOSTICOS_DATA_JS[areaName][turnoName];
-            const pronostico = parseInt(turnoData.pronostico, 10) || 0;
-            let produccionTotal = 0;
-            
-            if (HORAS_TURNO_JS[turnoName]) {
-                HORAS_TURNO_JS[turnoName].forEach(hora => {
-                    if (turnoData[hora]) {
-                        produccionTotal += parseInt(turnoData[hora], 10) || 0;
-                    }
-                });
-            }
-
             initialTurnState[areaSlug][toSlug(turnoName)] = {
-                pronostico: pronostico,
-                produccion: produccionTotal,
                 hasReason: !!turnoData.razon_desviacion
             };
         });
     });
 
-    // --- Calcular todos los totales al cargar la página ---
-    document.querySelectorAll('tr[data-area-slug], div.card').forEach(el => {
-        const areaSlug = el.dataset.areaSlug || toSlug(el.querySelector('button[data-target^="#collapse"]')?.textContent.trim());
+    // --- Calcular todos los totales y actualizar iconos al cargar la página ---
+    document.querySelectorAll('tr[data-area-slug]').forEach(row => {
+        const areaSlug = row.dataset.areaSlug;
         if (areaSlug) {
+            calculateAllTotals(areaSlug);
+        }
+    });
+    // También para la vista móvil
+    document.querySelectorAll('#accordionCaptura .card').forEach(card => {
+        const areaSlug = toSlug(card.querySelector('button').textContent.trim());
+        if(areaSlug) {
             calculateAllTotals(areaSlug);
         }
     });
 });
 
 /**
- * Convierte un texto a un formato 'slug'
+ * Convierte un texto a un formato 'slug' (ej: "Turno A" -> "Turno_A").
  * @param {string} text - El texto a convertir.
  * @returns {string} El texto en formato slug.
  */
@@ -66,7 +63,7 @@ function toSlug(text) {
 }
 
 /**
- * Recarga la página de captura con la fecha seleccionada.
+ * Recarga la página de captura con la fecha seleccionada del calendario.
  */
 function handleDateChange() {
     const form = document.getElementById('productionForm');
@@ -78,7 +75,11 @@ function handleDateChange() {
 }
 
 /**
- * Sincroniza los inputs de móvil con los de escritorio (que son los que se envían) y recalcula.
+ * Sincroniza los inputs de la vista móvil con los de escritorio y recalcula totales.
+ * @param {string} type - 'pronostico' o 'produccion'.
+ * @param {string} areaSlug - El slug del área.
+ * @param {string} identifier - El slug del turno o la hora.
+ * @param {string} value - El nuevo valor del input.
  */
 function syncAndCalc(type, areaSlug, identifier, value) {
     let desktopInputName = (type === 'pronostico') ? `pronostico_${areaSlug}_${identifier}` : `produccion_${areaSlug}_${identifier}`;
@@ -90,7 +91,7 @@ function syncAndCalc(type, areaSlug, identifier, value) {
 }
 
 /**
- * Calcula totales y gestiona la visibilidad del ícono de razón para escritorio y móvil.
+ * Calcula todos los totales para un área y gestiona la visibilidad del ícono de razón.
  * @param {string} areaSlug - El slug del área a calcular.
  */
 function calculateAllTotals(areaSlug) {
@@ -104,10 +105,14 @@ function calculateAllTotals(areaSlug) {
         const pronosticoValor = parseInt(pronosticoTurnoInput.value, 10) || 0;
         
         let totalProduccionTurno = 0;
+        let allInputsFilled = true; // CAMBIO: Bandera para verificar si todos los inputs del turno están llenos.
+        
         (HORAS_TURNO_JS[turnoName] || []).forEach(hora => {
             const produccionInput = document.querySelector(`input[name="produccion_${areaSlug}_${hora}"]`);
-            if (produccionInput && produccionInput.value) {
+            if (produccionInput && produccionInput.value !== '') {
                 totalProduccionTurno += parseInt(produccionInput.value, 10) || 0;
+            } else {
+                allInputsFilled = false; // Si un input está vacío, la bandera es falsa.
             }
         });
         
@@ -118,57 +123,54 @@ function calculateAllTotals(areaSlug) {
         totalProduccionArea += totalProduccionTurno;
         totalPronosticoArea += pronosticoValor;
 
-        // --- Lógica para el ícono de razón ---
+        // --- CAMBIO: Nueva lógica para mostrar el ícono de razón ---
         const iconContainers = document.querySelectorAll(`#reason_icon_container_${areaSlug}_${turnoSlug}, #mobile_reason_icon_container_${areaSlug}_${turnoSlug}`);
-        const initialState = initialTurnState[areaSlug]?.[turnoSlug];
+        const hasExistingReason = initialTurnState[areaSlug]?.[turnoSlug]?.hasReason || false;
 
-        if (initialState) {
-            iconContainers.forEach(container => {
-                container.innerHTML = ''; // Limpiar
-                container.classList.remove('reason-icon-active');
+        iconContainers.forEach(container => {
+            container.innerHTML = ''; // Limpiar contenedor
+            container.classList.remove('reason-icon-active');
 
-                if (initialState.hasReason) {
-                    container.innerHTML = '✅';
-                } else if (initialState.pronostico > 0 && initialState.produccion < initialState.pronostico) {
-                    container.innerHTML = '<i class="fas fa-exclamation-triangle text-warning"></i>';
-                    container.classList.add('reason-icon-active'); // Hacerlo clickable
-                }
-            });
-        }
+            if (hasExistingReason) {
+                // Si ya se envió una razón, mostrar ícono de éxito.
+                container.innerHTML = '<i class="fas fa-check-circle text-success" title="Razón ya enviada"></i>';
+            } else if (allInputsFilled && pronosticoValor > 0 && totalProduccionTurno < pronosticoValor) {
+                // Mostrar ícono de advertencia SÓLO si todos los campos están llenos y no se cumple el pronóstico.
+                container.innerHTML = '<i class="fas fa-exclamation-triangle text-warning" title="Falta justificación"></i>';
+                container.classList.add('reason-icon-active'); // Hacerlo clickable
+            }
+        });
     });
 
+    // Actualizar totales del área
     const totalPronosticoSpan = document.getElementById(`total_pronostico_area_${areaSlug}`);
-    if (totalPronosticoSpan) {
-        totalPronosticoSpan.innerText = totalPronosticoArea;
-    }
+    if (totalPronosticoSpan) totalPronosticoSpan.innerText = totalPronosticoArea;
 
     const totalProduccionSpan = document.getElementById(`total_produccion_area_${areaSlug}`);
-    if (totalProduccionSpan) {
-        totalProduccionSpan.innerText = totalProduccionArea;
-    }
+    if (totalProduccionSpan) totalProduccionSpan.innerText = totalProduccionArea;
 }
 
 /**
- * Prepara el modal con los datos correctos.
+ * Prepara el modal con los datos del turno/área correctos antes de mostrarlo.
  * @param {HTMLElement} container - El contenedor del ícono que fue clickeado.
  */
 function setReasonModalData(container) {
+    // Si el ícono no es clickable (no tiene la clase 'reason-icon-active'), no hacer nada.
     if (!container.classList.contains('reason-icon-active')) {
         event.stopPropagation();
         return;
     }
-    // CORRECCIÓN: No intentar modificar elementos que no existen en el modal.
     document.getElementById('modalDate').value = container.dataset.date;
     document.getElementById('modalArea').value = container.dataset.areaName;
     document.getElementById('modalTurno').value = container.dataset.turnoName;
-    document.getElementById('reasonText').value = '';
+    document.getElementById('reasonText').value = ''; // Limpiar el textarea
 }
 
 /**
- * Muestra un modal de feedback.
+ * Muestra un modal de feedback (éxito o error).
  * @param {string} title - Título del modal.
  * @param {string} message - Mensaje del modal.
- * @param {boolean} isSuccess - Si es un mensaje de éxito.
+ * @param {boolean} isSuccess - Si es un mensaje de éxito para darle el color correspondiente.
  */
 function showFeedback(title, message, isSuccess) {
     const header = document.getElementById('feedbackModalHeader');
@@ -184,7 +186,7 @@ function showFeedback(title, message, isSuccess) {
 }
 
 /**
- * Envía la razón de desviación al servidor.
+ * Envía la razón de desviación al servidor vía AJAX.
  */
 function submitReason() {
     const reasonText = document.getElementById('reasonText').value;
@@ -221,12 +223,14 @@ function submitReason() {
                 const areaSlug = toSlug(areaName);
                 const turnoSlug = toSlug(turnoName);
 
+                // Actualizar el ícono a 'éxito' y deshabilitarlo.
                 const iconContainers = document.querySelectorAll(`#reason_icon_container_${areaSlug}_${turnoSlug}, #mobile_reason_icon_container_${areaSlug}_${turnoSlug}`);
                 iconContainers.forEach(container => {
-                    container.innerHTML = '✅';
+                    container.innerHTML = '<i class="fas fa-check-circle text-success" title="Razón ya enviada"></i>';
                     container.classList.remove('reason-icon-active');
                 });
 
+                // Actualizar el estado para que no vuelva a pedir la razón en esta sesión.
                 if (initialTurnState[areaSlug] && initialTurnState[areaSlug][turnoSlug]) {
                     initialTurnState[areaSlug][turnoSlug].hasReason = true;
                 }
