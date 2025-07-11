@@ -31,7 +31,6 @@
                     <option value="Sistema" {% if filtros.get('area_grupo') == 'Sistema' %}selected{% endif %}>Sistema</option>
                 </select>
             </div>
-            <!-- CAMBIO: Nuevos filtros -->
             <div class="form-group col-md-3">
                 <label for="category">Categoría:</label>
                 <select id="category" name="category" class="form-control">
@@ -63,13 +62,12 @@
 
 <div class="content-section">
     <p class="text-muted">
-        Esta página muestra un registro de las acciones importantes realizadas en la aplicación. Se muestran los últimos 500 registros que coinciden con los filtros.
+        Esta página muestra un registro de las acciones importantes realizadas en la aplicación. Se muestran los últimos 500 registros que coinciden con los filtros. Las horas se muestran en tu zona horaria local.
     </p>
     <div class="table-responsive">
         <table class="table table-striped table-hover">
             <thead class="thead-dark">
                 <tr>
-                    <!-- CAMBIO: Columnas rediseñadas -->
                     <th style="width: 5%;"></th>
                     <th style="width: 15%;">Fecha y Hora</th>
                     <th style="width: 10%;">Usuario</th>
@@ -82,7 +80,6 @@
             <tbody>
                 {% for log in logs %}
                 <tr>
-                    <!-- Columna para el ícono de acción -->
                     <td class="text-center">
                         {% if log.category == 'Autenticación' %}
                             <i class="fas fa-sign-in-alt text-primary" title="Autenticación"></i>
@@ -94,7 +91,10 @@
                              <i class="fas fa-info-circle text-muted" title="General"></i>
                         {% endif %}
                     </td>
-                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <!-- CAMBIO: Se añade la clase 'local-datetime' y un atributo de datos con la hora UTC en formato ISO -->
+                    <td class="local-datetime" data-utc-date="{{ log.timestamp.isoformat() }}">
+                        {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                    </td>
                     <td>
                         {% if log.username %}
                             <span class="badge badge-info">{{ log.username }}</span>
@@ -102,7 +102,6 @@
                             <span class="badge badge-secondary">Sistema</span>
                         {% endif %}
                     </td>
-                    <!-- Columna para la severidad con colores -->
                     <td>
                         {% if log.severity == 'Critical' %}
                             <span class="badge badge-danger">{{ log.severity }}</span>
@@ -125,4 +124,40 @@
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// CAMBIO: Se añade este script para convertir las fechas
+document.addEventListener('DOMContentLoaded', function() {
+    // Selecciona todas las celdas de la tabla que tienen la clase 'local-datetime'
+    const dateCells = document.querySelectorAll('.local-datetime');
+
+    // Itera sobre cada celda encontrada
+    dateCells.forEach(cell => {
+        // Obtiene la fecha UTC del atributo 'data-utc-date' que agregamos
+        const utcDateString = cell.dataset.utcDate;
+        
+        if (utcDateString) {
+            // Crea un objeto de Fecha de JavaScript. El navegador lo interpreta como UTC.
+            const date = new Date(utcDateString);
+            
+            // Define las opciones para formatear la fecha a un estilo 'YYYY-MM-DD HH:MM:SS'.
+            // El locale 'sv-SE' (Suecia) convenientemente usa este formato.
+            const options = {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            
+            // Reemplaza el texto de la celda (que era la hora UTC) con la hora local formateada.
+            cell.textContent = date.toLocaleString('sv-SE', options);
+        }
+    });
+});
+</script>
 {% endblock %}
