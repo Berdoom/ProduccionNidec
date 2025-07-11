@@ -16,13 +16,12 @@
     </form>
 </div>
 
-{% if production_data %}
+{% if production_data or output_data %}
 <div class="content-section mt-4">
     <h5 class="mb-3">Desglose de datos para el: <span class="font-weight-bold" style="color: var(--nidec-green-dark);">{{ selected_date }}</span></h5>
     
     <!-- Vista de Escritorio -->
     <div class="table-responsive desktop-only">
-        <!-- CAMBIO: Se aplica la clase 'dashboard-table' para el nuevo estilo -->
         <table class="table dashboard-table">
             <thead>
                 <tr class="text-center">
@@ -30,7 +29,6 @@
                     {% for turno in nombres_turnos %}
                     <th colspan="2">{{ turno }}</th>
                     {% endfor %}
-                    <!-- CAMBIO: Nuevas cabeceras para los totales por área -->
                     <th rowspan="2" class="align-middle">Pronóstico Total</th>
                     <th rowspan="2" class="align-middle">Total Producido</th>
                 </tr>
@@ -42,44 +40,44 @@
                 </tr>
             </thead>
             <tbody>
-                {% for area in areas if area != 'Output' %}
-                <tr>
-                    <td class="area-header">{{ area }}</td>
-                    
-                    {# Namespaces para calcular totales por fila #}
-                    {% set total_pronostico_area = namespace(value=0) %}
-                    {% set total_producido_area = namespace(value=0) %}
+                <!-- CAMBIO: Bucle reestructurado para incluir siempre el Output -->
+                {% for area in areas %}
+                    {% if area == 'Output' %}
+                        {# Renderiza la fila especial para Output si existen datos #}
+                        {% if output_data and (output_data.pronostico or output_data.output) %}
+                        <tr class="output-row">
+                            <td class="area-header">Output</td>
+                            <td colspan="{{ nombres_turnos|length * 2 }}" class="text-center">-</td>
+                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.pronostico) }}</td>
+                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.output) }}</td>
+                        </tr>
+                        {% endif %}
+                    {% else %}
+                        {# Renderiza la fila normal para las demás áreas #}
+                        <tr>
+                            <td class="area-header">{{ area }}</td>
+                            
+                            {% set total_pronostico_area = namespace(value=0) %}
+                            {% set total_producido_area = namespace(value=0) %}
 
-                    {% for turno in nombres_turnos %}
-                        {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
-                        {% set pronostico = turno_data.get('pronostico', 0) %}
-                        {% set producido = turno_data.get('producido', 0) %}
-                        
-                        {# Acumular totales #}
-                        {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
-                        {% set total_producido_area.value = total_producido_area.value + producido %}
+                            {% for turno in nombres_turnos %}
+                                {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
+                                {% set pronostico = turno_data.get('pronostico', 0) %}
+                                {% set producido = turno_data.get('producido', 0) %}
+                                
+                                {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
+                                {% set total_producido_area.value = total_producido_area.value + producido %}
 
-                        <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
-                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido) }}</td>
-                    {% endfor %}
+                                <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
+                                <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido) }}</td>
+                            {% endfor %}
 
-                    {# CAMBIO: Celdas con los totales de la fila #}
-                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_pronostico_area.value) }}</td>
-                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_producido_area.value) }}</td>
-                </tr>
+                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_pronostico_area.value) }}</td>
+                            <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_producido_area.value) }}</td>
+                        </tr>
+                    {% endif %}
                 {% endfor %}
-
-                {# Fila especial para Output #}
-                {% if output_data and (output_data.pronostico or output_data.output) %}
-                <tr class="output-row">
-                    <td class="area-header">Output</td>
-                    <td colspan="{{ nombres_turnos|length * 2 }}" class="text-center">-</td>
-                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.pronostico) }}</td>
-                    <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.output) }}</td>
-                </tr>
-                {% endif %}
             </tbody>
-            <!-- CAMBIO: Pie de tabla rediseñado para mostrar totales generales -->
             <tfoot class="font-weight-bold text-center">
                 <tr class="table-dark">
                     <td>TOTAL</td>
@@ -95,37 +93,37 @@
 
     <!-- Vista Móvil (Acordeón) -->
     <div class="accordion-responsive" id="registroAccordion">
-    {% for area in areas %}
-        <div class="card">
-            <div class="card-header" id="headingReg{{ area | slug }}">
-                <button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapseReg{{ area | slug }}" aria-expanded="false" aria-controls="collapseReg{{ area | slug }}">
-                    {{ area }}
-                </button>
-            </div>
-            <div id="collapseReg{{ area | slug }}" class="collapse" aria-labelledby="headingReg{{ area | slug }}" data-parent="#registroAccordion">
-                <div class="card-body">
-                    <ul class="list-group list-group-flush">
-                        {% if area != 'Output' %}
-                            {% for turno in nombres_turnos %}
-                                {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
-                                <li class="list-group-item turno-header">{{ turno }}</li>
-                                <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ turno_data.get('pronostico', 0) }}</strong></li>
-                                <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ turno_data.get('producido', 0) }}</strong></li>
-                            {% endfor %}
-                        {% else %}
-                             <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ output_data.get('pronostico', 0) }}</strong></li>
-                            <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ output_data.get('output', 0) }}</strong></li>
-                        {% endif %}
-                    </ul>
+        {% for area in areas %}
+            <div class="card">
+                <div class="card-header" id="headingReg{{ area | slug }}">
+                    <button class="btn btn-link btn-block text-left collapsed" type="button" data-toggle="collapse" data-target="#collapseReg{{ area | slug }}" aria-expanded="false" aria-controls="collapseReg{{ area | slug }}">
+                        {{ area }}
+                    </button>
+                </div>
+                <div id="collapseReg{{ area | slug }}" class="collapse" aria-labelledby="headingReg{{ area | slug }}" data-parent="#registroAccordion">
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            {% if area != 'Output' %}
+                                {% for turno in nombres_turnos %}
+                                    {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
+                                    <li class="list-group-item turno-header">{{ turno }}</li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ turno_data.get('pronostico', 0) }}</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ turno_data.get('producido', 0) }}</strong></li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ output_data.get('pronostico', 0) }}</strong></li>
+                                <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ output_data.get('output', 0) }}</strong></li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
-    {% endfor %}
+        {% endfor %}
     </div>
 </div>
 {% endif %}
 
-{% if production_data %}
+{% if production_data or output_data %}
 <div class="content-section mt-4">
     <h4 class="mb-3">Gráfica de Producción vs. Meta</h4>
     <div style="height: 400px; position: relative;"><canvas id="productionChart"></canvas></div>
@@ -135,7 +133,7 @@
 
 {% block scripts %}
 <script>
-{% if production_data %}
+{% if production_data or output_data %}
 document.addEventListener('DOMContentLoaded', function() {
     try {
         const productionData = {{ production_data | tojson }};
