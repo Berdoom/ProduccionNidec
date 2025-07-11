@@ -1,0 +1,52 @@
+<!-- Modal para Reportar Problema -->
+<div class="modal fade" id="reportProblemModal" tabindex="-1" role="dialog" aria-labelledby="reportProblemModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="reportProblemModalLabel">Reportar un Problema en la Captura</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <form id="reportProblemForm">
+          <div class="modal-body">
+              <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+              <input type="hidden" id="report_fecha_problema" name="fecha_problema" value="{{ selected_date }}">
+              <input type="hidden" id="report_grupo" name="grupo" value="{{ group_name }}">
+              
+              <div class="form-group">
+                  <label for="report_area">Área</label>
+                  <select id="report_area" name="area" class="form-control" required>
+                      <option value="">-- Selecciona un área --</option>
+                      {% for area in areas %}<option value="{{ area }}">{{ area }}</option>{% endfor %}
+                  </select>
+              </div>
+              <div class="form-group">
+                  <label for="report_turno">Turno</label>
+                  <select id="report_turno" name="turno" class="form-control" required>
+                      <option value="">-- Selecciona un turno --</option>
+                      {% for turno in nombres_turnos %}<option value="{{ turno }}">{{ turno }}</option>{% endfor %}
+                  </select>
+              </div>
+              <div class="form-group">
+                  <label for="report_tipo_error">Tipo de Error</label>
+                  <select id="report_tipo_error" name="tipo_error" class="form-control" required>
+                      <option value="Error en Pronóstico">Error en Pronóstico</option>
+                      <option value="Error en Producción">Error en Producción</option>
+                      <option value="Dato Faltante">Dato Faltante</option>
+                      <option value="Otro">Otro</option>
+                  </select>
+              </div>
+              <div class="form-group">
+                  <label for="report_descripcion">Descripción del Problema</label>
+                  <textarea id="report_descripcion" name="descripcion" class="form-control" rows="3" required placeholder="Por favor, sé lo más específico posible. Ej: 'El pronóstico del Turno A era 150, no 15.'"></textarea>
+              </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Enviar Reporte</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
