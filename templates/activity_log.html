@@ -91,9 +91,8 @@
                              <i class="fas fa-info-circle text-muted" title="General"></i>
                         {% endif %}
                     </td>
-                    <!-- CAMBIO: Se añade la clase 'local-datetime' y un atributo de datos con la hora UTC en formato ISO -->
-                    <td class="local-datetime" data-utc-date="{{ log.timestamp.isoformat() }}">
-                        {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                    <td class="local-datetime" data-utc-date="{{ log.timestamp.isoformat() }}Z">
+                        Cargando...
                     </td>
                     <td>
                         {% if log.username %}
@@ -125,36 +124,22 @@
     </div>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-// CAMBIO: Se añade este script para convertir las fechas
 document.addEventListener('DOMContentLoaded', function() {
-    // Selecciona todas las celdas de la tabla que tienen la clase 'local-datetime'
+    // Busca todas las celdas con la clase 'local-datetime'
     const dateCells = document.querySelectorAll('.local-datetime');
-
-    // Itera sobre cada celda encontrada
     dateCells.forEach(cell => {
-        // Obtiene la fecha UTC del atributo 'data-utc-date' que agregamos
+        // Obtiene la fecha UTC del atributo de datos
         const utcDateString = cell.dataset.utcDate;
         
         if (utcDateString) {
-            // Crea un objeto de Fecha de JavaScript. El navegador lo interpreta como UTC.
             const date = new Date(utcDateString);
-            
-            // Define las opciones para formatear la fecha a un estilo 'YYYY-MM-DD HH:MM:SS'.
-            // El locale 'sv-SE' (Suecia) convenientemente usa este formato.
             const options = {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit',
                 hour12: false
             };
-            
-            // Reemplaza el texto de la celda (que era la hora UTC) con la hora local formateada.
             cell.textContent = date.toLocaleString('sv-SE', options);
         }
     });
