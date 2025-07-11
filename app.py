@@ -34,51 +34,32 @@ app.secret_key = os.getenv("SECRET_KEY", "n1D3c$#pro")
 scheduler = APScheduler()
 
 def check_and_send_notifications():
-    """
-    Esta es la función que el programador ejecutará periódicamente.
-    """
     with app.app_context():
         print(f"[{datetime.now()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
-        
         today = datetime.now().date()
         now = datetime.now()
-        
         missing_entries = []
-        
         all_areas = list(set([a for a in AREAS_IHP if a != 'Output'] + [a for a in AREAS_FHP if a != 'Output']))
-        
         for turno, horas in HORAS_TURNO.items():
             for hora_str in horas:
                 try:
                     hora_obj = datetime.strptime(hora_str, '%I%p').time()
                     target_datetime = datetime.combine(today, hora_obj)
-                except ValueError:
-                    continue
-
+                except ValueError: continue
                 if (target_datetime + timedelta(hours=1)) < now < (target_datetime + timedelta(hours=3)):
                     for area in all_areas:
                         grupo = 'IHP' if area in AREAS_IHP else 'FHP'
-                        entry_exists = db_session.query(ProduccionCaptura).filter(
-                            ProduccionCaptura.fecha == today,
-                            ProduccionCaptura.grupo == grupo,
-                            ProduccionCaptura.area == area,
-                            ProduccionCaptura.hora == hora_str
-                        ).first()
-                        
+                        entry_exists = db_session.query(ProduccionCaptura).filter(ProduccionCaptura.fecha == today, ProduccionCaptura.grupo == grupo, ProduccionCaptura.area == area, ProduccionCaptura.hora == hora_str).first()
                         if not entry_exists:
                             missing_info = f"- Grupo {grupo}, Área: {area}, Hora: {hora_str}"
                             missing_entries.append(missing_info)
-        
         if missing_entries:
             print(f"¡Se encontraron {len(missing_entries)} registros faltantes! Preparando para enviar correo.")
             recipient = os.getenv('MAIL_RECIPIENT')
             subject = f"Alerta: Faltan Registros de Producción ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
-            
             body_html = "<p>Se ha detectado que los siguientes registros de producción no han sido capturados a tiempo:</p><ul>"
-            for item in missing_entries:
-                body_html += f"<li>{item}</li>"
+            for item in missing_entries: body_html += f"<li>{item}</li>"
             body_html += "</ul><p>Por favor, acceda al sistema para completar la información.</p>"
-            
             send_email(recipient, subject, body_html)
         else:
             print(f"[{datetime.now()}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
@@ -90,19 +71,12 @@ with app.app_context():
     init_db()
     create_default_admin()
     print("Inicialización de la base de datos completada.")
-    
     if not scheduler.running:
         scheduler.init_app(app)
-        scheduler.add_job(
-            id='check_production_job',
-            func=check_and_send_notifications,
-            trigger='interval',
-            minutes=5
-        )
+        scheduler.add_job(id='check_production_job', func=check_and_send_notifications, trigger='interval', minutes=5)
         scheduler.start()
-        print("Sistema de notificaciones programadas iniciado. Se ejecutará cada 30 minutos.")
+        print("Sistema de notificaciones programadas iniciado.")
 
-# Configuración del tiempo de expiración de la sesión por inactividad
 app.permanent_session_lifetime = timedelta(minutes=30)
 
 @app.teardown_appcontext
@@ -124,14 +98,23 @@ def to_slug(text):
 
 app.jinja_env.filters['slug'] = to_slug
 
-def log_activity(action, details="", area_grupo=None):
+def get_month_name(month_number):
+    try: return calendar.month_name[int(month_number)]
+    except (IndexError, ValueError): return ''
+
+app.jinja_env.filters['month_name'] = get_month_name
+
+def log_activity(action, details="", area_grupo=None, category="General", severity="Info"):
     try:
         log_entry = ActivityLog(
             timestamp=datetime.now(),
             username=session.get('username', 'Sistema'),
             action=action,
             details=details,
-            area_grupo=area_grupo
+            area_grupo=area_grupo,
+            ip_address=request.remote_addr,
+            category=category,
+            severity=severity
         )
         db_session.add(log_entry)
     except exc.SQLAlchemyError as e:
@@ -189,10 +172,12 @@ def login():
             session['role'] = user.role
             session['nombre_completo'] = user.nombre_completo
             session['csrf_token'] = secrets.token_hex(16)
-            log_activity("Inicio de sesión", f"Usuario '{user.username}' (Rol: {user.role})", area_grupo='Sistema')
+            log_activity("Inicio de sesión", f"Usuario '{user.username}' (Rol: {user.role})", 'Sistema', 'Autenticación', 'Info')
             db_session.commit()
             return redirect(url_for('dashboard'))
         else:
+            log_activity("Intento de inicio de sesión fallido", f"Usuario: '{username}'", 'Sistema', 'Seguridad', 'Warning')
+            db_session.commit()
             flash('Usuario o contraseña incorrectos.', 'danger')
     if 'csrf_token' not in session: session['csrf_token'] = secrets.token_hex(16)
     return render_template('login.html')
@@ -201,7 +186,7 @@ def login():
 @login_required
 def logout():
     username = session.get('username', 'Desconocido')
-    log_activity("Cierre de sesión", f"Usuario '{username}'", area_grupo='Sistema')
+    log_activity("Cierre de sesión", f"Usuario '{username}'", 'Sistema', 'Autenticación', 'Info')
     db_session.commit()
     session.clear()
     flash('Has cerrado sesión correctamente.', 'info')
@@ -240,15 +225,26 @@ def get_group_performance(group_name, start_date_str, end_date_str=None):
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
     try:
-        query_pronostico = db_session.query(func.sum(Pronostico.valor_pronostico)).filter(Pronostico.grupo == group_name, Pronostico.fecha.between(start_date, end_date))
-        total_pronostico = query_pronostico.scalar() or 0
-        query_producido = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(ProduccionCaptura.grupo == group_name, ProduccionCaptura.fecha.between(start_date, end_date))
-        total_producido = query_producido.scalar() or 0
+        query_pronostico_areas = db_session.query(func.sum(Pronostico.valor_pronostico)).filter(Pronostico.grupo == group_name, Pronostico.fecha.between(start_date, end_date))
+        total_pronostico_areas = query_pronostico_areas.scalar() or 0
+        
+        query_pronostico_output = db_session.query(func.sum(OutputData.pronostico)).filter(OutputData.grupo == group_name, OutputData.fecha.between(start_date, end_date))
+        total_pronostico_output = query_pronostico_output.scalar() or 0
+
+        query_producido_areas = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(ProduccionCaptura.grupo == group_name, ProduccionCaptura.fecha.between(start_date, end_date))
+        total_producido_areas = query_producido_areas.scalar() or 0
+        
+        query_producido_output = db_session.query(func.sum(OutputData.output)).filter(OutputData.grupo == group_name, OutputData.fecha.between(start_date, end_date))
+        total_producido_output = query_producido_output.scalar() or 0
+
+        total_pronostico = total_pronostico_areas + total_pronostico_output
+        total_producido = total_producido_areas + total_producido_output
+
         eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
         return {'pronostico': f"{total_pronostico:,.0f}", 'producido': f"{total_producido:,.0f}", 'eficiencia': round(eficiencia, 2)}
     except exc.SQLAlchemyError as e:
         flash(f"Error al calcular el rendimiento del grupo: {e}", "danger")
-        return {'pronostico': 0, 'producido': 0, 'eficiencia': 0}
+        return {'pronostico': '0', 'producido': '0', 'eficiencia': 0}
 
 def get_structured_capture_data(group_name, selected_date):
     data_to_render = {}
@@ -281,10 +277,10 @@ def get_output_data(group, date_str):
     selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     try:
         output_row = db_session.query(OutputData).filter_by(fecha=selected_date, grupo=group).first()
-        if output_row: return {'pronostico': output_row.pronostico or '', 'output': output_row.output or ''}
+        if output_row: return {'pronostico': output_row.pronostico or 0, 'output': output_row.output or 0}
     except exc.SQLAlchemyError as e:
         flash(f"Error al obtener datos de Output: {e}", "danger")
-    return {'pronostico': '', 'output': ''}
+    return {'pronostico': 0, 'output': 0}
 
 def get_heatmap_data(selected_date):
     heatmap = {'IHP': {}, 'FHP': {}}
@@ -344,22 +340,39 @@ def dashboard_admin():
         selected_date = datetime.now().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
         flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
+    
     ihp_data = get_group_performance('IHP', selected_date_str)
     fhp_data = get_group_performance('FHP', selected_date_str)
+    
     total_pronostico = (int(ihp_data['pronostico'].replace(',', '')) + int(fhp_data['pronostico'].replace(',', '')))
     total_producido = (int(ihp_data['producido'].replace(',', '')) + int(fhp_data['producido'].replace(',', '')))
     total_eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
+    
     global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
     heatmap_data = get_heatmap_data(selected_date)
     latest_deviations = get_latest_deviations()
     today = datetime.now().date()
+    
     if selected_date == today:
         period_label = f"Hoy ({selected_date_str})"
     else:
         period_label = f"Día: {selected_date_str}"
+        
+    output_data_ihp = get_output_data('IHP', selected_date_str)
+    output_data_fhp = get_output_data('FHP', selected_date_str)
+        
     return render_template(
-        'dashboard_admin.html', period_label=period_label, selected_date=selected_date_str, global_kpis=global_kpis,
-        ihp_data=ihp_data, fhp_data=fhp_data, heatmap_data=heatmap_data, latest_deviations=latest_deviations, nombres_turnos=NOMBRES_TURNOS
+        'dashboard_admin.html', 
+        period_label=period_label, 
+        selected_date=selected_date_str, 
+        global_kpis=global_kpis,
+        ihp_data=ihp_data, 
+        fhp_data=fhp_data, 
+        heatmap_data=heatmap_data, 
+        latest_deviations=latest_deviations, 
+        nombres_turnos=NOMBRES_TURNOS,
+        output_data_ihp=output_data_ihp,
+        output_data_fhp=output_data_fhp
     )
 
 @app.route('/dashboard/<group>')
@@ -370,18 +383,33 @@ def dashboard_group(group):
     if session.get('role') not in [group_upper, 'ADMIN']:
         flash('No tienes permiso para ver este dashboard.', 'danger')
         return redirect(url_for('dashboard'))
+    
     today_str = datetime.now().strftime('%Y-%m-%d')
     yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    
     summary_today = get_group_performance(group_upper, today_str)
     summary_yesterday = get_group_performance(group_upper, yesterday_str)
+    
     prod_today_num = int(summary_today['producido'].replace(',', ''))
     prod_yesterday_num = int(summary_yesterday['producido'].replace(',', ''))
+    
     if prod_today_num > prod_yesterday_num: summary_today['trend'] = 'up'
     elif prod_today_num < prod_yesterday_num: summary_today['trend'] = 'down'
     else: summary_today['trend'] = 'stable'
+    
     performance_data = get_performance_data_from_db(group_upper, today_str)
     areas_list = [a for a in (AREAS_IHP if group_upper == 'IHP' else AREAS_FHP) if a != 'Output']
-    return render_template('dashboard_group.html', production_data=performance_data, summary=summary_today, areas=areas_list, turnos=NOMBRES_TURNOS, today=today_str, group_name=group_upper)
+    
+    output_data = get_output_data(group_upper, today_str)
+    
+    return render_template('dashboard_group.html', 
+                           production_data=performance_data, 
+                           summary=summary_today, 
+                           areas=areas_list, 
+                           turnos=NOMBRES_TURNOS, 
+                           today=today_str, 
+                           group_name=group_upper,
+                           output_data=output_data)
 
 @app.route('/registro/<group>')
 @login_required
@@ -391,12 +419,16 @@ def registro(group):
     if session.get('role') not in [group_upper, 'ADMIN']:
         flash('No tienes permiso para ver este registro.', 'danger')
         return redirect(url_for('dashboard'))
+    
     selected_date = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
+    
     production_data = get_performance_data_from_db(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date)
     meta_produccion = 879
+
     totals = {'pronostico': 0, 'producido': 0, 'eficiencia': 0, 'turnos': {turno: {'pronostico': 0, 'producido': 0} for turno in NOMBRES_TURNOS}}
+    
     for area in production_data:
         for turno, data in production_data[area].items():
             pronostico = data.get('pronostico', 0)
@@ -406,9 +438,22 @@ def registro(group):
             if turno in totals['turnos']:
                 totals['turnos'][turno]['pronostico'] += pronostico
                 totals['turnos'][turno]['producido'] += producido
+
+    totals['pronostico'] += output_data.get('pronostico', 0)
+    totals['producido'] += output_data.get('output', 0)
+    
     if totals['pronostico'] > 0:
         totals['eficiencia'] = (totals['producido'] / totals['pronostico']) * 100
-    return render_template('registro_group.html', selected_date=selected_date, production_data=production_data, areas=areas_list, nombres_turnos=NOMBRES_TURNOS, output_data=output_data, group_name=group_upper, totals=totals, meta=meta_produccion)
+
+    return render_template('registro_group.html', 
+                           selected_date=selected_date, 
+                           production_data=production_data, 
+                           areas=areas_list, 
+                           nombres_turnos=NOMBRES_TURNOS, 
+                           output_data=output_data, 
+                           group_name=group_upper, 
+                           totals=totals, 
+                           meta=meta_produccion)
 
 @app.route('/reportes')
 @login_required
@@ -426,15 +471,15 @@ def reportes():
     try:
         num_days = calendar.monthrange(year, month)[1]
         for day in range(1, num_days + 1):
-            date = datetime(year, month, day).date()
-            pronostico_dia = db_session.query(func.sum(Pronostico.valor_pronostico)).filter_by(fecha=date, grupo=group).scalar() or 0
-            produccion_dia = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter_by(fecha=date, grupo=group).scalar() or 0
-            if pronostico_dia > 0:
-                eficiencia = round((produccion_dia / pronostico_dia) * 100, 2)
+            date_str = f"{year}-{month:02d}-{day:02d}"
+            performance_day = get_group_performance(group, date_str)
+            eficiencia = performance_day.get('eficiencia', 0)
+            if eficiencia > 0:
                 efficiency_data['labels'].append(f"{day}/{month}")
                 efficiency_data['data'].append(eficiencia)
     except exc.SQLAlchemyError as e:
         flash(f"Error al calcular la tendencia de eficiencia: {e}", "danger")
+    
     areas_data = {'labels': [], 'data': []}
     try:
         start_of_month = datetime(year, month, 1).date()
@@ -448,8 +493,18 @@ def reportes():
             if produccion_area > 0:
                 areas_data['labels'].append(area)
                 areas_data['data'].append(produccion_area)
+        
+        output_mes = db_session.query(func.sum(OutputData.output)).filter(
+            OutputData.grupo == group, 
+            OutputData.fecha.between(start_of_month, end_of_month)
+        ).scalar() or 0
+        if output_mes > 0:
+            areas_data['labels'].append('Output')
+            areas_data['data'].append(output_mes)
+
     except exc.SQLAlchemyError as e:
         flash(f"Error al calcular la comparación de áreas: {e}", "danger")
+        
     return render_template('reportes.html', group=group, selected_year=year, selected_month=month, is_admin=is_admin, efficiency_data=efficiency_data, areas_data=areas_data)
 
 @app.route('/captura/<group>', methods=['GET', 'POST'])
@@ -486,12 +541,12 @@ def captura(group):
                             if old_val != new_val:
                                 existing.valor_pronostico = new_val
                                 changes_detected = True
-                                log_activity("Modificación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor cambiado de {old_val} a {new_val}", group_upper)
+                                log_activity("Modificación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor cambiado de {old_val} a {new_val}", group_upper, 'Datos', 'Info')
                         else:
                             new_entry = Pronostico(fecha=selected_date, grupo=group_upper, area=area, turno=turno, valor_pronostico=new_val)
                             db_session.add(new_entry)
                             changes_detected = True
-                            log_activity("Creación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor establecido: {new_val}", group_upper)
+                            log_activity("Creación Pronóstico", f"Fecha:{selected_date_str}, Área:{area}, Turno:{turno}. Valor establecido: {new_val}", group_upper, 'Datos', 'Info')
                 for hora in sum(HORAS_TURNO.values(), []):
                     new_val_str = request.form.get(f'produccion_{area_slug}_{hora}')
                     if new_val_str.isdigit():
@@ -504,12 +559,12 @@ def captura(group):
                                 existing.usuario_captura = session.get('username')
                                 existing.fecha_captura = now_dt
                                 changes_detected = True
-                                log_activity("Modificación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor cambiado de {old_val} a {new_val}", group_upper)
+                                log_activity("Modificación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor cambiado de {old_val} a {new_val}", group_upper, 'Datos', 'Info')
                         else:
                             new_entry = ProduccionCaptura(fecha=selected_date, grupo=group_upper, area=area, hora=hora, valor_producido=new_val, usuario_captura=session.get('username'), fecha_captura=now_dt)
                             db_session.add(new_entry)
                             changes_detected = True
-                            log_activity("Creación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor establecido: {new_val}", group_upper)
+                            log_activity("Creación Producción", f"Fecha:{selected_date_str}, Área:{area}, Hora:{hora}. Valor establecido: {new_val}", group_upper, 'Datos', 'Info')
             new_pron_out_str = request.form.get('pronostico_output')
             new_prod_out_str = request.form.get('produccion_output')
             if existing_output:
@@ -517,17 +572,17 @@ def captura(group):
                 old_prod = existing_output.output or 0
                 if new_pron_out_str.isdigit() and int(new_pron_out_str) != old_pron:
                     changes_detected = True
-                    log_activity("Modificación Output Pronóstico", f"Fecha:{selected_date_str}. Valor cambiado de {old_pron} a {new_pron_out_str}", group_upper)
+                    log_activity("Modificación Output Pronóstico", f"Fecha:{selected_date_str}. Valor cambiado de {old_pron} a {new_pron_out_str}", group_upper, 'Datos', 'Info')
                     existing_output.pronostico = int(new_pron_out_str)
                 if new_prod_out_str.isdigit() and int(new_prod_out_str) != old_prod:
                     changes_detected = True
-                    log_activity("Modificación Output Producción", f"Fecha:{selected_date_str}. Valor cambiado de {old_prod} a {new_prod_out_str}", group_upper)
+                    log_activity("Modificación Output Producción", f"Fecha:{selected_date_str}. Valor cambiado de {old_prod} a {new_prod_out_str}", group_upper, 'Datos', 'Info')
                     existing_output.output = int(new_prod_out_str)
             elif new_pron_out_str.isdigit() or new_prod_out_str.isdigit():
                 changes_detected = True
                 new_output = OutputData(fecha=selected_date, grupo=group_upper, pronostico=int(new_pron_out_str or 0), output=int(new_prod_out_str or 0), usuario_captura=session.get('username'), fecha_captura=now_dt)
                 db_session.add(new_output)
-                log_activity("Creación Output", f"Fecha:{selected_date_str}. Pronóstico: {new_pron_out_str}, Producción: {new_prod_out_str}", group_upper)
+                log_activity("Creación Output", f"Fecha:{selected_date_str}. Pronóstico: {new_pron_out_str}, Producción: {new_prod_out_str}", group_upper, 'Datos', 'Info')
             db_session.commit()
             if changes_detected: flash('Cambios guardados y registrados exitosamente.', 'success')
             else: flash('No se detectaron cambios para guardar.', 'info')
@@ -535,6 +590,7 @@ def captura(group):
             db_session.rollback()
             flash(f"Error al guardar en la base de datos: {e}", 'danger')
         return redirect(url_for('captura', group=group, fecha=selected_date_str))
+        
     selected_date_str = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     data_for_template = get_structured_capture_data(group_upper, selected_date)
@@ -553,13 +609,14 @@ def submit_reason():
         if pronostico_entry:
             old_reason = pronostico_entry.razon_desviacion
             pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, datetime.now()
-            if old_reason != reason: log_activity("Registro de Razón", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", area_grupo=group)
+            if old_reason != reason: 
+                log_activity("Registro de Razón", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
             db_session.commit()
             return jsonify({'status': 'success', 'message': 'Razón guardada exitosamente.'})
         else:
             new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=datetime.now())
             db_session.add(new_entry)
-            log_activity("Registro de Razón (Nuevo)", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", area_grupo=group)
+            log_activity("Registro de Razón (Nuevo)", f"Fecha:{date_str}, Área:{area}, Turno:{turno_name}", group, 'Datos', 'Warning')
             db_session.commit()
             return jsonify({'status': 'success', 'message': 'Razón guardada exitosamente para un nuevo registro.'})
     except exc.SQLAlchemyError as e:
@@ -576,48 +633,97 @@ def export_excel(group):
     if session.get('role') not in [group_upper, 'ADMIN']:
         flash('No tienes permiso para exportar estos datos.', 'danger')
         return redirect(url_for('dashboard'))
+    
     selected_date = request.args.get('fecha', datetime.now().strftime('%Y-%m-%d'))
     production_data = get_performance_data_from_db(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date)
     meta_produccion = 879
+    
     records = []
     for area, turnos_data in production_data.items():
         record = {'Área': area}
+        total_pronostico_area = 0
         total_producido_area = 0
         for turno, data in turnos_data.items():
+            pronostico = data.get('pronostico', 0)
             producido = data.get('producido', 0)
+            record[f'Pronóstico {turno}'] = pronostico
             record[f'Producido {turno}'] = producido
+            total_pronostico_area += pronostico
             total_producido_area += producido
+        record['Pronóstico Total'] = total_pronostico_area
         record['Producido Total'] = total_producido_area
         records.append(record)
+        
+    if output_data and (output_data.get('pronostico') or output_data.get('output')):
+        output_record = {'Área': 'Output'}
+        for turno in NOMBRES_TURNOS:
+            output_record[f'Pronóstico {turno}'] = None 
+            output_record[f'Producido {turno}'] = None
+        output_record['Pronóstico Total'] = output_data.get('pronostico', 0)
+        output_record['Producido Total'] = output_data.get('output', 0)
+        records.append(output_record)
+
     if not records:
         flash('No hay datos para exportar en la fecha seleccionada.', 'warning')
         return redirect(url_for('registro', group=group_upper, fecha=selected_date))
+        
     df = pd.DataFrame(records)
-    if output_data and output_data.get('output'):
-        output_row = pd.DataFrame([{'Área': 'Output', 'Producido Total': output_data.get('output', 0)}])
-        df = pd.concat([df, output_row], ignore_index=True)
+    
+    cols = ['Área']
+    for turno in NOMBRES_TURNOS:
+        cols.append(f'Pronóstico {turno}')
+        cols.append(f'Producido {turno}')
+    cols.extend(['Pronóstico Total', 'Producido Total'])
+    df = df[cols]
     df['Meta'] = meta_produccion
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='RegistroProduccion', startrow=1)
         workbook, worksheet = writer.book, writer.sheets['RegistroProduccion']
+        
         header_format = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1})
         title_format = workbook.add_format({'bold': True, 'font_size': 14})
+        
         worksheet.write('A1', f'Reporte de Producción - {group_upper} ({selected_date})', title_format)
+        
         for col_num, value in enumerate(df.columns.values):
             worksheet.write(1, col_num, value, header_format)
-        worksheet.set_column('A:A', 20); worksheet.set_column('B:Z', 15)
+        
+        worksheet.set_column('A:A', 20)
+        worksheet.set_column('B:Z', 15)
+
         column_chart = workbook.add_chart({'type': 'column'})
         num_rows = len(df)
+        
         producido_total_col_letter = chr(ord('A') + df.columns.get_loc('Producido Total'))
         meta_col_letter = chr(ord('A') + df.columns.get_loc('Meta'))
-        column_chart.add_series({'name': f'=RegistroProduccion!${producido_total_col_letter}$2', 'categories': f'=RegistroProduccion!$A$3:$A${num_rows + 2}', 'values': f'=RegistroProduccion!${producido_total_col_letter}$3:${producido_total_col_letter}${num_rows + 2}', 'fill': {'color': '#24b817'}, 'border': {'color': '#1c8c11'}})
+
+        column_chart.add_series({
+            'name':       f'=RegistroProduccion!${producido_total_col_letter}$2',
+            'categories': f'=RegistroProduccion!$A$3:$A${num_rows + 2}',
+            'values':     f'=RegistroProduccion!${producido_total_col_letter}$3:${producido_total_col_letter}${num_rows + 2}',
+            'fill':       {'color': '#24b817'},
+            'border':     {'color': '#1c8c11'}
+        })
+
         line_chart = workbook.add_chart({'type': 'line'})
-        line_chart.add_series({'name': f'=RegistroProduccion!${meta_col_letter}$2', 'categories': f'=RegistroProduccion!$A$3:$A${num_rows + 2}', 'values': f'=RegistroProduccion!${meta_col_letter}$3:${meta_col_letter}${num_rows + 2}', 'line': {'color': 'red', 'width': 2.25, 'dash_type': 'solid'}})
+        line_chart.add_series({
+            'name':       f'=RegistroProduccion!${meta_col_letter}$2',
+            'categories': f'=RegistroProduccion!$A$3:$A${num_rows + 2}',
+            'values':     f'=RegistroProduccion!${meta_col_letter}$3:${meta_col_letter}${num_rows + 2}',
+            'line':       {'color': 'red', 'width': 2.25, 'dash_type': 'solid'}
+        })
+
         column_chart.combine(line_chart)
-        column_chart.set_title({'name': 'Producción por Área vs. Meta'}); column_chart.set_x_axis({'name': 'Áreas'}); column_chart.set_y_axis({'name': 'Unidades'}); column_chart.set_size({'width': 720, 'height': 480})
+        column_chart.set_title({'name': 'Producción por Área vs. Meta'})
+        column_chart.set_x_axis({'name': 'Áreas'})
+        column_chart.set_y_axis({'name': 'Unidades'})
+        column_chart.set_size({'width': 720, 'height': 480})
+        
         worksheet.insert_chart(f'A{num_rows + 5}', column_chart)
+
     output.seek(0)
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'produccion_{group_upper}_{selected_date}.xlsx')
 
@@ -654,7 +760,7 @@ def update_reason_status(reason_id):
     if reason and new_status:
         old_status = reason.status
         reason.status = new_status
-        log_activity("Cambio de Estado de Razón", f"ID Razón: {reason.id}. Estado cambiado de '{old_status}' a '{new_status}'.")
+        log_activity("Cambio de Estado de Razón", f"ID Razón: {reason.id}. Estado cambiado de '{old_status}' a '{new_status}'.", reason.grupo, 'Datos', 'Info')
         db_session.commit()
         flash(f"El estado de la razón ha sido actualizado a '{new_status}'.", 'success')
     else:
@@ -672,6 +778,7 @@ def manage_users():
         role = request.form.get('role')
         nombre_completo = request.form.get('nombre_completo')
         cargo = request.form.get('cargo')
+        turno = request.form.get('turno') 
         
         if not all([username, password, role, nombre_completo, cargo]):
             flash('Todos los campos son obligatorios.', 'warning')
@@ -679,25 +786,15 @@ def manage_users():
             if db_session.query(Usuario).filter_by(username=username).first():
                 flash(f"El nombre de usuario '{username}' ya existe.", 'danger')
             else:
-                new_user = Usuario(
-                    username=username, 
-                    password=password, 
-                    role=role, 
-                    nombre_completo=nombre_completo, 
-                    cargo=cargo
-                )
+                new_user = Usuario(username=username, password=password, role=role, nombre_completo=nombre_completo, cargo=cargo, turno=turno)
                 db_session.add(new_user)
-                log_activity(
-                    "Creación de usuario", 
-                    f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 
-                    area_grupo='ADMIN'
-                )
+                log_activity("Creación de usuario", f"Admin '{session.get('username')}' creó al usuario '{username}' ({nombre_completo}) con el rol '{role}'.", 'ADMIN', 'Seguridad', 'Info')
                 db_session.commit()
                 flash(f"Usuario '{username}' creado exitosamente.", 'success')
         return redirect(url_for('manage_users'))
     
     users = db_session.query(Usuario).order_by(Usuario.id).all()
-    return render_template('manage_users.html', users=users)
+    return render_template('manage_users.html', users=users, nombres_turnos=NOMBRES_TURNOS)
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @login_required
@@ -710,8 +807,8 @@ def delete_user(user_id):
     user_to_delete = db_session.query(Usuario).filter_by(id=user_id).first()
     if user_to_delete:
         username_to_delete = user_to_delete.username
+        log_activity("Eliminación de usuario", f"Admin '{session.get('username')}' eliminó al usuario '{username_to_delete}'.", 'ADMIN', 'Seguridad', 'Critical')
         db_session.delete(user_to_delete)
-        log_activity("Eliminación de usuario", f"Admin '{session.get('username')}' eliminó al usuario '{username_to_delete}'.", area_grupo='ADMIN')
         db_session.commit()
         flash('Usuario eliminado exitosamente.', 'success')
     else:
@@ -725,17 +822,34 @@ def activity_log():
     if request.args.get('limpiar'):
         session.pop('log_filtros', None)
         return redirect(url_for('activity_log'))
-    filtros = session.get('log_filtros', {}) if not request.args else {'fecha_inicio': request.args.get('fecha_inicio'), 'fecha_fin': request.args.get('fecha_fin'), 'usuario': request.args.get('usuario'), 'area_grupo': request.args.get('area_grupo')}
+    
+    filtros = session.get('log_filtros', {}) if not request.args else {
+        'fecha_inicio': request.args.get('fecha_inicio'), 
+        'fecha_fin': request.args.get('fecha_fin'), 
+        'usuario': request.args.get('usuario'), 
+        'area_grupo': request.args.get('area_grupo'),
+        'category': request.args.get('category'),
+        'severity': request.args.get('severity')
+    }
     session['log_filtros'] = filtros
+    
     query = db_session.query(ActivityLog)
+    
     if filtros.get('fecha_inicio'): query = query.filter(ActivityLog.timestamp >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d'))
     if filtros.get('fecha_fin'): 
         end_date = datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d') + timedelta(days=1)
         query = query.filter(ActivityLog.timestamp < end_date)
     if filtros.get('usuario'): query = query.filter(ActivityLog.username.ilike(f"%{filtros['usuario']}%"))
     if filtros.get('area_grupo') and filtros.get('area_grupo') != 'Todos': query = query.filter(ActivityLog.area_grupo == filtros['area_grupo'])
+    if filtros.get('category') and filtros.get('category') != 'Todos': query = query.filter(ActivityLog.category == filtros['category'])
+    if filtros.get('severity') and filtros.get('severity') != 'Todos': query = query.filter(ActivityLog.severity == filtros['severity'])
+    
     logs = query.order_by(ActivityLog.timestamp.desc()).limit(500).all()
-    return render_template('activity_log.html', logs=logs, filtros=filtros)
+    
+    log_categories = ['Autenticación', 'Datos', 'Seguridad', 'Sistema', 'General']
+    log_severities = ['Info', 'Warning', 'Critical']
+
+    return render_template('activity_log.html', logs=logs, filtros=filtros, log_categories=log_categories, log_severities=log_severities)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
