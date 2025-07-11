@@ -23,22 +23,21 @@
         <!--        VISTA PARA ESCRITORIO        -->
         <!-- =================================== -->
         <div class="table-responsive desktop-only">
-            <table class="table table-bordered" style="min-width: 1600px;">
+            <table class="table table-bordered table-sm" style="min-width: 1350px;">
                 <thead class="thead-light">
                     <tr class="text-center">
                         <th rowspan="2" class="align-middle" style="width: 12%;">Área</th>
-                        <th rowspan="2" class="align-middle">Pronóstico<br>Total</th>
-                        <!-- Cabeceras para cada turno -->
+                        <th rowspan="2" class="align-middle">Pron.<br>Total</th>
                         {% for turno_name in nombres_turnos %}
                         <th colspan="{{ horas_turno[turno_name]|length + 2 }}">Turno {{ loop.index }} ({{ turno_name }})</th>
                         {% endfor %}
-                        <th rowspan="2" class="align-middle">Total<br>Producido</th>
+                        <th rowspan="2" class="align-middle">Total<br>Prod.</th>
                     </tr>
                     <tr class="text-center">
                         {% for turno_name in nombres_turnos %}
                         <th>Prono.</th>
                         {% for hora in horas_turno[turno_name] %}<th>{{ hora }}</th>{% endfor %}
-                        <th>Total Turno</th>
+                        <th>Total</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -56,14 +55,14 @@
                             <td>
                                 <input type="number" name="pronostico_{{ area_slug }}_{{ turno_slug }}"
                                        value="{{ turno_data.get('pronostico', '') | e }}"
-                                       min="0" class="form-control text-center pronostico-turno-input"
+                                       min="0" class="form-control form-control-sm text-center pronostico-turno-input"
                                        oninput="calculateAllTotals('{{ area_slug }}')">
                             </td>
                             {% for hora in horas_turno[turno_name] %}
                             <td>
                                 <input type="number" name="produccion_{{ area_slug }}_{{ hora }}"
                                        value="{{ turno_data.get(hora, '') | e }}"
-                                       min="0" class="form-control text-center"
+                                       min="0" class="form-control form-control-sm text-center"
                                        oninput="calculateAllTotals('{{ area_slug }}')">
                             </td>
                             {% endfor %}
@@ -156,7 +155,8 @@
             </table>
         </div>
 
-        <div class="text-center mt-4">
+        <!-- CAMBIO: Contenedor para el botón de guardado -->
+        <div class="save-button-container">
              <button type="submit" class="btn btn-lg btn-nidec-style"><i class="fas fa-save"></i> Guardar Todos los Cambios</button>
         </div>
     </form>

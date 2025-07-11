@@ -47,14 +47,17 @@
 <!-- Tabla de Producción Detallada -->
 <div class="content-section">
     <h4 class="mb-3">Desglose de Producción del Día por Área y Turno</h4>
-    <div class="table-responsive">
-        <table class="table table-bordered table-hover responsive-list-table">
-            <thead class="thead-light">
+    
+    <!-- Vista para Escritorio -->
+    <div class="table-responsive d-none d-lg-block">
+        <table class="table dashboard-table">
+            <thead>
                 <tr class="text-center">
-                    <th style="text-align: left;" rowspan="2" class="align-middle">Área</th>
+                    <th rowspan="2" class="align-middle">Área</th>
                     {% for turno in turnos %}
                     <th colspan="2">{{ turno }}</th>
                     {% endfor %}
+                    <th rowspan="2" class="align-middle">Pronóstico Total</th>
                     <th rowspan="2" class="align-middle">Total Producido</th>
                 </tr>
                  <tr class="text-center">
@@ -67,21 +70,117 @@
             <tbody>
                 {% for area in areas %}
                 <tr>
-                    <td class="area-header" data-label="Área">{{ area }}</td>
+                    <td class="area-header">{{ area }}</td>
+                    
+                    {% set total_pronostico_area = namespace(value=0) %}
                     {% set total_producido_area = namespace(value=0) %}
+
                     {% for turno in turnos %}
                         {% set data = production_data.get(area, {}).get(turno, {}) %}
                         {% set pronostico = data.get('pronostico', 0) %}
                         {% set producido = data.get('producido', 0) %}
+                        
+                        {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
                         {% set total_producido_area.value = total_producido_area.value + producido %}
-                        <td class="text-center" data-label="Pron. {{ turno }}">{{ pronostico }}</td>
-                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}" data-label="Prod. {{ turno }}">{{ producido }}</td>
+
+                        <td class="text-center">{{ pronostico }}</td>
+                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ producido }}</td>
                     {% endfor %}
-                    <td class="text-center font-weight-bold" data-label="Total Producido">{{ total_producido_area.value }}</td>
+
+                    <td class="text-center font-weight-bold">{{ total_pronostico_area.value }}</td>
+                    <td class="text-center font-weight-bold">{{ total_producido_area.value }}</td>
                 </tr>
                 {% endfor %}
+
+                {% if output_data and (output_data.pronostico or output_data.output) %}
+                <tr class="output-row">
+                    <td class="area-header">Output</td>
+                    <td colspan="{{ turnos|length * 2 }}" class="text-center">-</td>
+                    <td class="text-center font-weight-bold">{{ output_data.pronostico }}</td>
+                    <td class="text-center font-weight-bold">{{ output_data.output }}</td>
+                </tr>
+                {% endif %}
             </tbody>
         </table>
+    </div>
+
+    <!-- CAMBIO: Vista para Móvil con tarjetas colapsables -->
+    <div class="accordion-responsive d-lg-none" id="dashboardAccordionMobile">
+        {% for area in areas %}
+            <div class="card mb-2">
+                <div class="card-header bg-light p-0">
+                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse-{{ area|slug }}" aria-expanded="false" aria-controls="collapse-{{ area|slug }}">
+                        <h5 class="mb-0">{{ area }}</h5>
+                    </button>
+                </div>
+
+                <div id="collapse-{{ area|slug }}" class="collapse">
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0 mobile-dashboard-table">
+                                <thead>
+                                    <tr class="text-center">
+                                        <th class="text-left">Turno</th>
+                                        <th>Pronóstico</th>
+                                        <th>Producido</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set total_pronostico_area = namespace(value=0) %}
+                                    {% set total_producido_area = namespace(value=0) %}
+                                    {% for turno in turnos %}
+                                        {% set data = production_data.get(area, {}).get(turno, {}) %}
+                                        {% set pronostico = data.get('pronostico', 0) %}
+                                        {% set producido = data.get('producido', 0) %}
+                                        {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
+                                        {% set total_producido_area.value = total_producido_area.value + producido %}
+                                        <tr class="text-center">
+                                            <td class="text-left font-weight-bold">{{ turno }}</td>
+                                            <td>{{ pronostico }}</td>
+                                            <td class="font-weight-bold {% if producido < pronostico and pronostico > 0 %}text-danger{% endif %}">{{ producido }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="font-weight-bold text-center">
+                                     <tr class="table-secondary">
+                                        <td class="text-left">Total Área</td>
+                                        <td>{{ total_pronostico_area.value }}</td>
+                                        <td>{{ total_producido_area.value }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        
+        <!-- Card para Output -->
+        {% if output_data and (output_data.pronostico or output_data.output) %}
+        <div class="card mb-2">
+            <div class="card-header bg-light p-0">
+                <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse-output" aria-expanded="false" aria-controls="collapse-output">
+                    <h5 class="mb-0">Output</h5>
+                </button>
+            </div>
+            <div id="collapse-output" class="collapse">
+                <div class="card-body p-0">
+                     <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr>
+                                <td class="w-50">Pronóstico Total</td>
+                                <td class="w-50 text-center font-weight-bold">{{ output_data.pronostico }}</td>
+                            </tr>
+                            <tr>
+                                <td>Producido Total</td>
+                                <td class="text-center font-weight-bold">{{ output_data.output }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -54,7 +54,7 @@
     <div class="col-lg-8 mb-4">
         <div class="card shadow-sm h-100">
             <div class="card-header">
-                <h4 class="mb-0"><i class="fas fa-th"></i> Mapa de Desempeño por Área y Turno (% Eficiencia)</h4>
+                <h4 class="mb-0"><i class="fas fa-th"></i> Desempeño por Área y Turno</h4>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -82,6 +82,30 @@
                                 </tr>
                                 {% endfor %}
                             {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4">
+                    <h5 class="mb-3">Output</h5>
+                    <table class="table table-bordered text-center">
+                         <thead class="thead-light">
+                            <tr>
+                                <th>Grupo</th>
+                                <th>Pronóstico de Output</th>
+                                <th>Producción de Output</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="output-row">
+                                <td class="font-weight-bold">IHP</td>
+                                <td>{{ "{:,.0f}".format(output_data_ihp.pronostico) }}</td>
+                                <td>{{ "{:,.0f}".format(output_data_ihp.output) }}</td>
+                            </tr>
+                             <tr class="output-row">
+                                <td class="font-weight-bold">FHP</td>
+                                <td>{{ "{:,.0f}".format(output_data_fhp.pronostico) }}</td>
+                                <td>{{ "{:,.0f}".format(output_data_fhp.output) }}</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>

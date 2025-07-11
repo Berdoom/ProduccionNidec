@@ -1,4 +1,3 @@
-<!-- templates/manage_users.html -->
 {% extends "layout.html" %}
 
 {% block title %}Gestionar Usuarios{% endblock %}
@@ -37,6 +36,16 @@
                         <option value="ADMIN">ADMIN</option>
                     </select>
                 </div>
+                <!-- CAMBIO: Campo para seleccionar el turno -->
+                <div class="form-group">
+                    <label for="turno" class="font-weight-bold">Turno:</label>
+                    <select class="form-control" id="turno" name="turno">
+                        <option value="">N/A</option>
+                        {% for turno_name in nombres_turnos %}
+                        <option value="{{ turno_name }}">{{ turno_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <button type="submit" class="btn btn-nidec-style btn-block">Crear Usuario</button>
             </form>
         </div>
@@ -55,6 +64,8 @@
                             <th>Nombre Completo</th>
                             <th>Cargo</th>
                             <th>Rol</th>
+                            <!-- CAMBIO: Cabecera para la columna de Turno -->
+                            <th>Turno</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -72,6 +83,8 @@
                                 {% else %}<span class="badge badge-secondary">{{ user.role }}</span>
                                 {% endif %}
                             </td>
+                            <!-- CAMBIO: Celda para mostrar el turno del usuario -->
+                            <td>{{ user.turno or 'N/A' }}</td>
                             <td>
                                 {% if user.id != session.user_id %}
                                 <form action="{{ url_for('delete_user', user_id=user.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar a este usuario?');">
