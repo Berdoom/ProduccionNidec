@@ -22,20 +22,24 @@
     
     <!-- Vista de Escritorio -->
     <div class="table-responsive desktop-only">
-        <table class="table dashboard-table">
+        <table class="table dashboard-table table-bordered">
             <thead>
                 <tr class="text-center">
                     <th rowspan="2" class="align-middle">Área</th>
                     {% for turno in nombres_turnos %}
-                    <th colspan="2">{{ turno }}</th>
+                    <!-- Colspan is: 1 (pronostico) + number of hours + 1 (total) -->
+                    <th colspan="{{ horas_turno[turno]|length + 2 }}">{{ turno }}</th>
                     {% endfor %}
-                    <th rowspan="2" class="align-middle">Pronóstico Total</th>
-                    <th rowspan="2" class="align-middle">Total Producido</th>
+                    <th rowspan="2" class="align-middle">Pronóstico<br>Total</th>
+                    <th rowspan="2" class="align-middle">Total<br>Producido</th>
                 </tr>
                 <tr class="text-center">
-                    {% for _ in nombres_turnos %}
+                    {% for turno in nombres_turnos %}
                     <th>Pronóstico</th>
-                    <th>Producido</th>
+                    {% for hora in horas_turno[turno] %}
+                    <th>{{ hora }}</th>
+                    {% endfor %}
+                    <th>Total Turno</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -51,13 +55,21 @@
                     {% for turno in nombres_turnos %}
                         {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
                         {% set pronostico = turno_data.get('pronostico', 0) %}
-                        {% set producido = turno_data.get('producido', 0) %}
+                        {% set producido_turno = turno_data.get('producido', 0) %}
                         
                         {% set total_pronostico_area.value = total_pronostico_area.value + pronostico %}
-                        {% set total_producido_area.value = total_producido_area.value + producido %}
+                        {% set total_producido_area.value = total_producido_area.value + producido_turno %}
 
+                        <!-- Pronóstico del turno -->
                         <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
-                        <td class="text-center font-weight-bold {% if producido < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido) }}</td>
+
+                        <!-- Producción por hora -->
+                        {% for hora in horas_turno[turno] %}
+                        <td class="text-center">{{ "{:,.0f}".format(detailed_hourly_data.get(area, {}).get(hora, 0)) }}</td>
+                        {% endfor %}
+                        
+                        <!-- Total producido del turno -->
+                        <td class="text-center font-weight-bold {% if producido_turno < pronostico and pronostico > 0 %}shortfall-cell{% endif %}">{{ "{:,.0f}".format(producido_turno) }}</td>
                     {% endfor %}
 
                     <td class="text-center font-weight-bold">{{ "{:,.0f}".format(total_pronostico_area.value) }}</td>
@@ -66,9 +78,13 @@
                 {% endfor %}
 
                 <!-- Fila explícita para el Output -->
+                {% set total_columns_for_turns = namespace(value=0) %}
+                {% for turno in nombres_turnos %}
+                    {% set total_columns_for_turns.value = total_columns_for_turns.value + horas_turno[turno]|length + 2 %}
+                {% endfor %}
                 <tr class="output-row">
                     <td class="area-header">Output</td>
-                    <td colspan="{{ nombres_turnos|length * 2 }}" class="text-center align-middle font-italic text-muted"></td>
+                    <td colspan="{{ total_columns_for_turns.value }}" class="text-center align-middle font-italic text-muted">No aplica desglose por turno/hora</td>
                     <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.pronostico) }}</td>
                     <td class="text-center font-weight-bold">{{ "{:,.0f}".format(output_data.output) }}</td>
                 </tr>
@@ -76,7 +92,8 @@
             <tfoot class="font-weight-bold text-center">
                 <tr class="table-dark">
                     <td>TOTAL</td>
-                    <td colspan="{{ (nombres_turnos|length * 2) + 2 }}">
+                    <!-- Colspan is total columns for turns + 2 total columns - 1 for the 'TOTAL' cell -->
+                    <td colspan="{{ total_columns_for_turns.value + 1 }}">
                         Pronóstico: <strong>{{ "{:,.0f}".format(totals.pronostico) }}</strong> | 
                         Producido: <strong>{{ "{:,.0f}".format(totals.producido) }}</strong> | 
                         Eficiencia: <strong>{{ "{:,.2f}".format(totals.eficiencia) }}%</strong>
@@ -102,12 +119,16 @@
                                 {% for turno in nombres_turnos %}
                                     {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
                                     <li class="list-group-item turno-header">{{ turno }}</li>
-                                    <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ turno_data.get('pronostico', 0) }}</strong></li>
-                                    <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ turno_data.get('producido', 0) }}</strong></li>
+                                    <li class="list-group-item d-flex justify-content-between"><span>Pronóstico Turno:</span> <strong>{{ "{:,.0f}".format(turno_data.get('pronostico', 0)) }}</strong></li>
+                                    <!-- Loop through hours -->
+                                    {% for hora in horas_turno[turno] %}
+                                        <li class="list-group-item d-flex justify-content-between"><span>Producción {{ hora }}:</span> <strong>{{ "{:,.0f}".format(detailed_hourly_data.get(area, {}).get(hora, 0)) }}</strong></li>
+                                    {% endfor %}
+                                    <li class="list-group-item d-flex justify-content-between"><span>Total Producido Turno:</span> <strong>{{ "{:,.0f}".format(turno_data.get('producido', 0)) }}</strong></li>
                                 {% endfor %}
                             {% else %}
-                                <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ output_data.get('pronostico', 0) }}</strong></li>
-                                <li class="list-group-item d-flex justify-content-between"><span>Producido:</span> <strong>{{ output_data.get('output', 0) }}</strong></li>
+                                <li class="list-group-item d-flex justify-content-between"><span>Pronóstico Total:</span> <strong>{{ "{:,.0f}".format(output_data.get('pronostico', 0)) }}</strong></li>
+                                <li class="list-group-item d-flex justify-content-between"><span>Producido Total:</span> <strong>{{ "{:,.0f}".format(output_data.get('output', 0)) }}</strong></li>
                             {% endif %}
                         </ul>
                     </div>
@@ -146,6 +167,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return totalProducido;
         });
 
+        // --- CAMBIO AQUÍ ---
+        // Se cambió output_data.output por outputData.output
         if (areas.includes('Output') && outputData && (outputData.output || outputData.output === 0)) {
             labels.push('Output');
             producidoData.push(outputData.output);

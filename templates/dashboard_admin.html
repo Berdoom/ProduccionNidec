@@ -18,132 +18,133 @@
 </div>
 
 
-<!-- 1. KPIs Principales -->
-<div class="row mb-4">
-    <div class="col-lg-4 mb-3">
-        <div class="card h-100 text-white" style="background-color: #343a40;">
-            <div class="card-body text-center">
-                <h5 class="card-title"><i class="fas fa-industry"></i> Nidec General</h5>
-                <h3 class="font-weight-bold">{{ global_kpis.producido }} / {{ global_kpis.pronostico }}</h3>
-                <p class="mb-0">Eficiencia: {{ global_kpis.eficiencia }}%</p>
+<!-- KPIs CON RUEDAS DE PROGRESO (SE OCULTAN EN MÓVIL) -->
+<div class="row text-center mb-4 d-none d-lg-flex">
+    <!-- Rueda Nidec General -->
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="kpi-wheel-card">
+            <div class="circular-progress-kpi {{ global_kpis.eficiencia|heatmap_color }}" style="--value: {{ global_kpis.eficiencia }}">
+                <span class="progress-value">{{ "%.1f"|format(global_kpis.eficiencia) }}%</span>
             </div>
+            <h5 class="mt-3 font-weight-bold">Nidec General</h5>
+            <p class="text-muted h4">{{ global_kpis.producido }} / {{ global_kpis.pronostico }}</p>
         </div>
     </div>
-    <div class="col-lg-4 mb-3">
-        <div class="card h-100">
-            <div class="card-body text-center">
-                <h5 class="card-title">Resumen IHP</h5>
-                <h3 class="font-weight-bold">{{ ihp_data.producido }} / {{ ihp_data.pronostico }}</h3>
-                <p class="mb-0">Eficiencia: {{ ihp_data.eficiencia }}%</p>
+    <!-- Rueda IHP -->
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="kpi-wheel-card">
+            <div class="circular-progress-kpi {{ ihp_data.eficiencia|heatmap_color }}" style="--value: {{ ihp_data.eficiencia }}">
+                <span class="progress-value">{{ "%.1f"|format(ihp_data.eficiencia) }}%</span>
             </div>
+            <h5 class="mt-3 font-weight-bold">Resumen IHP</h5>
+            <p class="text-muted h4">{{ ihp_data.producido }} / {{ ihp_data.pronostico }}</p>
         </div>
     </div>
-    <div class="col-lg-4 mb-3">
-        <div class="card h-100">
-            <div class="card-body text-center">
-                <h5 class="card-title">Resumen FHP</h5>
-                <h3 class="font-weight-bold">{{ fhp_data.producido }} / {{ fhp_data.pronostico }}</h3>
-                <p class="mb-0">Eficiencia: {{ fhp_data.eficiencia }}%</p>
+    <!-- Rueda FHP -->
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="kpi-wheel-card">
+            <div class="circular-progress-kpi {{ fhp_data.eficiencia|heatmap_color }}" style="--value: {{ fhp_data.eficiencia }}">
+                <span class="progress-value">{{ "%.1f"|format(fhp_data.eficiencia) }}%</span>
             </div>
+            <h5 class="mt-3 font-weight-bold">Resumen FHP</h5>
+            <p class="text-muted h4">{{ fhp_data.producido }} / {{ fhp_data.pronostico }}</p>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <!-- 2. Mapa de Desempeño -->
-    <div class="col-lg-8 mb-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-header">
-                <h4 class="mb-0"><i class="fas fa-th"></i> Desempeño por Área y Turno</h4>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-bordered text-center heatmap-table">
-                        <thead class="thead-light">
-                            <tr>
-                                <th style="width: 20%;">Área</th>
-                                {% for turno in nombres_turnos %}
-                                <th>{{ turno }}</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for group, areas in heatmap_data.items() %}
-                                <tr class="group-header"><td colspan="{{ nombres_turnos|length + 1 }}">{{ group }}</td></tr>
-                                {% for area, turnos in areas.items() %}
-                                <tr>
-                                    <td class="text-left font-weight-bold">{{ area }}</td>
-                                    {% for turno_name in nombres_turnos %}
-                                        {% set eficiencia = turnos.get(turno_name, 0) %}
-                                        <td class="{{ eficiencia|heatmap_color }}">
-                                            {% if eficiencia > 0 %}{{ "%.1f"|format(eficiencia) }}%{% else %}-{% endif %}
-                                        </td>
-                                    {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="mt-4">
-                    <h5 class="mb-3">Output</h5>
-                    <table class="table table-bordered text-center">
-                         <thead class="thead-light">
-                            <tr>
-                                <th>Grupo</th>
-                                <th>Pronóstico de Output</th>
-                                <th>Producción de Output</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr class="output-row">
-                                <td class="font-weight-bold">IHP</td>
-                                <td>{{ "{:,.0f}".format(output_data_ihp.pronostico) }}</td>
-                                <td>{{ "{:,.0f}".format(output_data_ihp.output) }}</td>
-                            </tr>
-                             <tr class="output-row">
-                                <td class="font-weight-bold">FHP</td>
-                                <td>{{ "{:,.0f}".format(output_data_fhp.pronostico) }}</td>
-                                <td>{{ "{:,.0f}".format(output_data_fhp.output) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- CAMBIO: Sección actualizada para reflejar el Centro de Acciones -->
-    <div class="col-lg-4 mb-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-inbox"></i> Últimas Acciones Pendientes</h5>
-            </div>
-            {% if latest_pending_items %}
-            <div class="list-group list-group-flush">
-                {% for item in latest_pending_items %}
-                <a href="{{ url_for('centro_acciones') }}" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">
-                            <span class="badge {% if 'Desviación' in item.tipo %}badge-warning{% else %}badge-danger{% endif %}">{{ item.tipo }}</span>
-                            {{ item.area }}
-                        </h6>
-                        <small>{{ item.timestamp.strftime('%Y-%m-%d') }}</small>
-                    </div>
-                    <p class="mb-1 small text-truncate">"{{ item.detalles }}"</p>
-                    <small class="text-muted">Enviado por: {{ item.usuario }}</small>
-                </a>
+<!-- TABLAS CONSOLIDADAS POR GRUPO -->
+{% for group, areas_data in performance_data.items() %}
+<div class="content-section">
+    <h3 class="mb-4 font-weight-bold" style="color: var(--nidec-green-dark);">Desempeño Detallado - {{ group }}</h3>
+    
+    <!-- VISTA DE ESCRITORIO -->
+    <div class="table-responsive desktop-only-table">
+        <table class="table group-performance-table table-bordered table-hover">
+            <thead class="text-center thead-light">
+                <tr>
+                    <th rowspan="2" class="align-middle">Área</th>
+                    {% for turno_name in nombres_turnos %}<th colspan="{{ horas_turno[turno_name]|length + 3 }}">{{ turno_name }}</th>{% endfor %}
+                </tr>
+                <tr>
+                    {% for turno_name in nombres_turnos %}
+                    <th>Pron.</th>
+                    {% for hora in horas_turno[turno_name] %}<th>{{ hora }}</th>{% endfor %}
+                    <th>Total Prod.</th>
+                    <th>Eficiencia</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for area, turnos in areas_data.items() %}
+                <tr>
+                    <td class="area-name-cell">{{ area }}</td>
+                    {% for turno_name in nombres_turnos %}
+                        {% set turno_data = turnos[turno_name] %}
+                        {% set eficiencia = turno_data.eficiencia %}
+                        <td class="text-center font-weight-bold">{{ turno_data.pronostico }}</td>
+                        {% for hora in horas_turno[turno_name] %}<td class="text-center hourly-data-cell">{{ turno_data.horas.get(hora, '-') }}</td>{% endfor %}
+                        <td class="text-center font-weight-bold">{{ turno_data.producido }}</td>
+                        <td class="text-center efficiency-cell">
+                            <div class="progress" style="height: 22px; font-size: 0.9rem;">
+                                <div class="progress-bar font-weight-bold {{ eficiencia|heatmap_color }}" role="progressbar" style="width: {{ eficiencia }}%;" aria-valuenow="{{ eficiencia }}" aria-valuemin="0" aria-valuemax="100">{{ "%.1f"|format(eficiencia) }}%</div>
+                            </div>
+                        </td>
+                    {% endfor %}
+                </tr>
                 {% endfor %}
-            </div>
-            {% else %}
-            <div class="card-body text-center text-muted d-flex align-items-center justify-content-center">
-                <div>
-                    <i class="fas fa-check-circle fa-3x text-success mb-2"></i>
-                    <p class="mb-0">¡Excelente! No hay acciones pendientes.</p>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- VISTA MÓVIL -->
+    <div class="mobile-only-view">
+        <!-- NUEVO: Mensaje para girar el dispositivo -->
+        <div class="rotate-device-prompt">
+            <i class="fas fa-sync-alt"></i>
+            <span>Gira tu dispositivo para ver la tabla completa</span>
+        </div>
+        
+        <div class="accordion mobile-accordion" id="accordion-{{ group }}">
+            {% for area, turnos in areas_data.items() %}
+            <div class="card">
+                <div class="card-header" id="heading-{{ group }}-{{ area|slug }}">
+                    <button class="btn btn-link btn-block text-left" type="button" data-toggle="collapse" data-target="#collapse-{{ group }}-{{ area|slug }}">
+                        {{ area }}
+                    </button>
+                </div>
+                <div id="collapse-{{ group }}-{{ area|slug }}" class="collapse" data-parent="#accordion-{{ group }}">
+                    <div class="card-body">
+                        <div class="accordion" id="accordion-shifts-{{ group }}-{{ area|slug }}">
+                            {% for turno_name in nombres_turnos %}
+                            {% set turno_data = turnos[turno_name] %}
+                            {% set eficiencia = turno_data.eficiencia %}
+                            <div class="card shift-card">
+                                <div class="card-header shift-header" id="heading-shift-{{ group }}-{{ area|slug }}-{{ turno_name|slug }}">
+                                    <button class="btn btn-link btn-block text-left" data-toggle="collapse" data-target="#collapse-shift-{{ group }}-{{ area|slug }}-{{ turno_name|slug }}">
+                                        {{ turno_name }}
+                                        <span class="badge badge-pill float-right {{ eficiencia|heatmap_color_badge }}">{{ "%.0f"|format(eficiencia) }}%</span>
+                                    </button>
+                                </div>
+                                <div id="collapse-shift-{{ group }}-{{ area|slug }}-{{ turno_name|slug }}" class="collapse" data-parent="#accordion-shifts-{{ group }}-{{ area|slug }}">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between"><span>Pronóstico:</span> <strong>{{ turno_data.pronostico }}</strong></li>
+                                        {% for hora in horas_turno[turno_name] %}
+                                        <li class="list-group-item d-flex justify-content-between text-muted"><span><i class="far fa-clock mr-2"></i>{{ hora }}:</span> <span>{{ turno_data.horas.get(hora, '-') }}</span></li>
+                                        {% endfor %}
+                                        <li class="list-group-item d-flex justify-content-between"><span>Total Producido:</span> <strong>{{ turno_data.producido }}</strong></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
             </div>
-            {% endif %}
+            {% endfor %}
         </div>
     </div>
 </div>
+{% endfor %}
+
 {% endblock %}

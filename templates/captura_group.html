@@ -30,10 +30,10 @@
                 <thead class="thead-light">
                     <tr class="text-center">
                         <th rowspan="2" class="align-middle" style="width: 12%;">Área</th>
-                        <th rowspan="2" class="align-middle">Pron.<br>Total</th>
                         {% for turno_name in nombres_turnos %}
                         <th colspan="{{ horas_turno[turno_name]|length + 2 }}">Turno {{ loop.index }} ({{ turno_name }})</th>
                         {% endfor %}
+                        <th rowspan="2" class="align-middle">Pron.<br>Total</th>
                         <th rowspan="2" class="align-middle">Total<br>Prod.</th>
                     </tr>
                     <tr class="text-center">
@@ -49,7 +49,6 @@
                     {% set area_slug = area | slug %}
                     <tr data-area-slug="{{ area_slug }}" data-area-name="{{ area }}">
                         <td class="font-weight-bold align-middle">{{ area }}</td>
-                        <td class="text-center align-middle font-weight-bold total-column" id="total_pronostico_area_{{ area_slug }}">0</td>
                         
                         {% for turno_name in nombres_turnos %}
                             {% set turno_slug = turno_name | slug %}
@@ -81,6 +80,7 @@
                             </td>
                         {% endfor %}
                         
+                        <td class="text-center align-middle font-weight-bold total-column" id="total_pronostico_area_{{ area_slug }}">0</td>
                         <td class="text-center align-middle font-weight-bold total-column" id="total_produccion_area_{{ area_slug }}">0</td>
                     </tr>
                     {% endfor %}
@@ -186,9 +186,9 @@
     function updateInputFontSize(input) {
         const len = input.value.length;
         input.classList.remove('input-font-sm', 'input-font-xs');
-        if (len > 6) {
+        if (len >= 5) { // 5 o más dígitos
             input.classList.add('input-font-xs');
-        } else if (len > 4) {
+        } else if (len === 4) { // Exactamente 4 dígitos
             input.classList.add('input-font-sm');
         }
     }
