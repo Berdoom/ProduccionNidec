@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import generate_password_hash
@@ -75,6 +75,7 @@ class Pronostico(Base):
     usuario_razon = Column(String(80))
     fecha_razon = Column(DateTime)
     status = Column(String(50), default='Nuevo', index=True)
+    __table_args__ = (UniqueConstraint('fecha', 'grupo', 'area', 'turno', name='_fecha_grupo_area_turno_uc'),)
 
 class ProduccionCaptura(Base):
     __tablename__ = 'produccion_capturas'
@@ -86,6 +87,7 @@ class ProduccionCaptura(Base):
     valor_producido = Column(Integer)
     usuario_captura = Column(String(80))
     fecha_captura = Column(DateTime, default=datetime.utcnow)
+    __table_args__ = (UniqueConstraint('fecha', 'grupo', 'area', 'hora', name='_fecha_grupo_area_hora_uc'),)
 
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'
