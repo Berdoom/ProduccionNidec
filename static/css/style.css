@@ -12,6 +12,16 @@
     --text-dark: #212529;
     --text-muted: #6c757d;
     --border-color: #dee2e6;
+    
+    /* Colores para KPIs y Celdas */
+    --kpi-red: #ef4444;
+    --kpi-yellow: #f59e0b;
+    --kpi-green: #22c55e;
+    --kpi-grey: #e5e7eb;
+
+    --cell-red-bg: #fee2e2;
+    --cell-yellow-bg: #fffbeb;
+    --cell-green-bg: #f0fdf4;
 }
 
 body {
@@ -27,6 +37,7 @@ body {
     justify-content: space-between;
     align-items: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .nidec-navbar {
@@ -83,118 +94,210 @@ body {
 .btn-nidec { background-color: var(--nidec-green); border-color: var(--nidec-green); color: var(--white) !important; font-weight: 600; transition: all 0.2s ease; padding: 0.75rem; border-radius: 8px; }
 .btn-nidec:hover { background-color: var(--nidec-green-dark); border-color: var(--nidec-green-dark); }
 
-/* --- Insignias de Rol --- */
-.badge-role-admin { background-color: var(--nidec-green-dark); color: white; }
-.badge-role-ihp, .badge-role-fhp { background-color: var(--nidec-green); color: white; }
-.badge-nidec { background-color: var(--nidec-green); color: var(--white); }
 
-/* --- Estilos de Tabla de Captura --- */
-.production-table input[type="number"]:focus { border-color: var(--nidec-green); box-shadow: 0 0 0 3px rgba(36, 184, 23, 0.25); }
-.pronostico-turno-input { background-color: var(--nidec-green-light); border: 1px solid var(--nidec-green); font-weight: 700; color: var(--nidec-green-dark); }
-.turno-total-cell { background-color: #f1f3f5; }
-.shortfall-cell { background-color: #ffeeba !important; color: #856404 !important; font-weight: bold; }
-.badge-success-reason { background-color: var(--nidec-green); color: white; padding: .3em .5em; border-radius: 6px; font-size: 0.75rem; }
+/* ==========================================================================
+   NUEVOS ESTILOS PARA DASHBOARD (RUEDAS DE PROGRESO)
+   ========================================================================== */
 
-/* === ESTILOS PARA EL TAMAÑO DE INPUTS Y FUENTES EN CAPTURA === */
-.desktop-only .table-sm input.adaptive-font {
-    width: 70px;
-    max-width: 70px;
-    padding: .25rem .1rem;
-    font-size: 0.9em;
-    box-sizing: border-box;
+.kpi-wheel-card {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.07);
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
-.input-font-sm { font-size: 0.8em !important; }
-.input-font-xs { font-size: 0.7em !important; }
 
+.kpi-wheel-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
 
-/* --- Estilos para la Fila de Razón en Bandeja --- */
-tr.status-en-revisión { background-color: #fff3cd !important; }
-tr.status-resuelto { background-color: #d4edda !important; }
-tr.status-resuelto td { color: #6c757d; text-decoration: line-through; }
-tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
+.circular-progress-kpi {
+    position: relative;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 1rem;
+}
+
+.circular-progress-kpi::before {
+    content: "";
+    position: absolute;
+    height: 84%;
+    width: 84%;
+    background-color: #fff;
+    border-radius: 50%;
+}
+
+.progress-value {
+    position: relative;
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+/* Clases de color para las ruedas */
+.kpi-red { background: conic-gradient(var(--kpi-red) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
+.kpi-red .progress-value { color: var(--kpi-red); }
+.kpi-yellow { background: conic-gradient(var(--kpi-yellow) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
+.kpi-yellow .progress-value { color: var(--kpi-yellow); }
+.kpi-green { background: conic-gradient(var(--kpi-green) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
+.kpi-green .progress-value { color: var(--kpi-green); }
+.kpi-wheel-card h5 { font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
+.kpi-wheel-card p.text-muted { color: #6b7280; font-size: 1rem; font-weight: 500; }
 
 /* --- Estilos para Notificaciones (Toasts) --- */
 .toast-container { position: fixed; top: 90px; right: 20px; z-index: 1055; }
-.save-button-container { text-align: center; margin-top: 2rem; }
 
-/* =================================================================
-   ESTILOS PARA ACORDEÓN RESPONSIVE (PÁGINAS GENERALES) 
-================================================================= */
-@media (max-width: 768px) {
-    .table-responsive.desktop-only, .dashboard-table { display: none; }
-    .accordion-responsive { display: block; }
-    .accordion-responsive .card, #registroAccordion .card { margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; }
-    .accordion-responsive .card-header, #registroAccordion .card-header { background-color: var(--nidec-green-light); padding: 0; border-bottom: 1px solid var(--border-color); }
-    .accordion-responsive .card-header button, #registroAccordion .card-header button { color: var(--nidec-green-dark); font-weight: 600; font-size: 1.1rem; width: 100%; text-align: left; padding: 1rem; text-decoration: none; border: none; background: transparent; position: relative; }
-    .accordion-responsive .card-header button:after, #registroAccordion .card-header button:after { content: '\f078'; font-family: 'Font Awesome 5 Free'; font-weight: 900; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); transition: transform 0.2s ease-in-out; }
-    .accordion-responsive .card-header button.collapsed:after, #registroAccordion .card-header button.collapsed:after { transform: translateY(-50%) rotate(-90deg); }
-    .accordion-responsive .card-body, #registroAccordion .card-body { padding: 0; }
-    .accordion-responsive .list-group-item, #registroAccordion .list-group-item { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1rem; }
-    .accordion-responsive .list-group-item strong { color: var(--text-dark); }
-    .accordion-responsive .list-group-item span, .accordion-responsive .list-group-item input { text-align: right; }
-    .accordion-responsive .list-group-item input[type="number"] { width: 100px; flex-shrink: 0; padding: 6px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; }
-    .list-group-item.turno-header { background-color: #f1f3f5; font-weight: bold; color: var(--text-dark); justify-content: center; }
-    
-    .save-button-container { position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.98); padding: 1rem; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 0; border-top: 1px solid var(--border-color); }
-    .save-button-container .btn { width: 100%; }
-    main.container-fluid { padding-bottom: 100px; }
+/* ==========================================================================
+   NUEVOS ESTILOS PARA LA PÁGINA DE CAPTURA
+   ========================================================================== */
+.total-cell-success, .turno-total-mobile.total-cell-success { background-color: var(--cell-green-bg) !important; color: var(--nidec-green-dark); }
+.total-cell-warning, .turno-total-mobile.total-cell-warning { background-color: var(--cell-yellow-bg) !important; color: #b45309; }
+.total-cell-danger, .turno-total-mobile.total-cell-danger { background-color: var(--cell-red-bg) !important; color: #b91c1c; }
+
+.input-success { border-color: var(--kpi-green) !important; background-color: var(--cell-green-bg) !important; }
+.input-warning { border-color: var(--kpi-yellow) !important; background-color: var(--cell-yellow-bg) !important; }
+
+/* ==========================================================================
+   ESTILOS PARA LA VISTA MÓVIL DE CAPTURA (MEJORADA)
+   ========================================================================== */
+.mobile-capture-card {
+    background-color: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    overflow: hidden;
 }
 
-/* =================================================================
-   ESTILOS PARA EL DASHBOARD DE ADMINISTRADOR (VERSIÓN FINAL)
-================================================================= */
-
-/* --- Estilos para las Ruedas de Progreso de KPIs --- */
-.kpi-wheel-card { padding: 1.5rem; background: var(--white); border-radius: 1rem; box-shadow: 0 5px 20px rgba(0,0,0,0.07); transition: transform 0.2s ease; }
-.kpi-wheel-card:hover { transform: translateY(-5px); }
-.circular-progress-kpi { position: relative; height: 160px; width: 160px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: conic-gradient(var(--gradient-color) calc(var(--value) * 1%), #ededed 0); }
-.circular-progress-kpi::before { content: ""; position: absolute; height: 88%; width: 88%; background-color: var(--white); border-radius: 50%; }
-.circular-progress-kpi .progress-value { position: relative; font-size: 2.5rem; font-weight: 700; color: #333; }
-
-/* --- Estilos para las Tablas Consolidadas de Admin --- */
-.group-performance-table { border-collapse: separate; border-spacing: 0; }
-.group-performance-table thead th { font-weight: 600; vertical-align: middle; white-space: nowrap; }
-.group-performance-table .area-name-cell { font-weight: 700; background-color: #f8f9fa; width: 12%; vertical-align: middle; position: sticky; left: 0; z-index: 2; }
-.table-responsive .group-performance-table thead th:first-child { position: sticky; left: 0; z-index: 3; }
-.group-performance-table td { vertical-align: middle; }
-.group-performance-table .hourly-data-cell { background-color: #fdfdfd; color: var(--text-muted); font-size: 0.9em; }
-.group-performance-table .efficiency-cell { min-width: 120px; }
-.group-performance-table .progress-bar { color: #212529; text-shadow: 0 0 3px rgba(255,255,255,0.7); }
-
-/* --- Colores para Dashboard Admin --- */
-.heatmap-zero { --gradient-color: #e0e0e0; }
-.heatmap-danger { --gradient-color: #dc3545; }
-.heatmap-warning { --gradient-color: #ffc107; }
-.heatmap-success { --gradient-color: #28a745; }
-.heatmap-excellent { --gradient-color: var(--nidec-green); }
-.progress-bar.heatmap-danger { background-color: #f8d7da !important; }
-.progress-bar.heatmap-warning { background-color: #fff3cd !important; }
-.progress-bar.heatmap-success { background-color: #d4edda !important; }
-.progress-bar.heatmap-excellent { background-color: #a3e9b3 !important; }
-.progress-bar.heatmap-zero { background-color: #f8f9fa !important; color: #6c757d !important; }
-
-/* --- Lógica de Visibilidad para Dashboard Admin --- */
-.desktop-only-table { display: block; }
-.mobile-only-view { display: none; }
-.rotate-device-prompt { display: none; }
-
-@media (max-width: 991.98px) and (orientation: landscape) {
-    .desktop-only-table { display: block; }
-    .mobile-only-view { display: none; }
+.mobile-capture-card .card-header {
+    background-color: #f8f9fa;
+    padding: 0;
+    border-bottom: 1px solid var(--border-color);
 }
 
-@media (max-width: 991.98px) and (orientation: portrait) {
-    .desktop-only-table { display: none; }
-    .mobile-only-view { display: block; }
-    .rotate-device-prompt { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 1rem; background-color: var(--nidec-green-light); border: 1px dashed var(--nidec-green); border-radius: .5rem; color: var(--nidec-green-dark); font-weight: 500; margin-bottom: 1.5rem; text-align: center; }
-    .rotate-device-prompt .fa-sync-alt { animation: fa-spin 2s linear infinite; }
+.mobile-capture-card .btn-link {
+    width: 100%;
+    text-align: left;
+    padding: 1rem 1.25rem;
+    font-weight: 600;
+    color: var(--text-dark);
+    text-decoration: none;
+    font-size: 1.1rem;
 }
 
-/* --- Estilos para Acordeón Móvil de Dashboard Admin --- */
-.mobile-accordion .card { border: 1px solid var(--border-color); margin-bottom: .5rem; }
-.mobile-accordion .card-header { background-color: var(--nidec-green-light); padding: 0; }
-.mobile-accordion .card-header button { font-weight: 600; color: var(--nidec-green-dark); text-decoration: none; padding: .75rem 1.25rem; }
-.mobile-accordion .shift-card { border-left: none; border-right: none; margin-bottom: 0; border-radius: 0; }
-.mobile-accordion .shift-header { background-color: #fff; font-weight: 500; }
-.mobile-accordion .shift-header button { color: var(--text-dark); }
-.mobile-accordion .badge { font-size: 100%; vertical-align: middle; }
+.mobile-capture-card .btn-link:hover {
+    background-color: #e9ecef;
+}
+
+.mobile-capture-card .card-body {
+    padding: 0;
+}
+
+.turno-section-mobile {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e9ecef;
+}
+.turno-section-mobile:last-child {
+    border-bottom: none;
+}
+
+.turno-header-mobile {
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--nidec-green-dark);
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--nidec-green);
+}
+
+.capture-row-mobile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+}
+
+.capture-row-mobile label {
+    margin-bottom: 0;
+    font-weight: 500;
+}
+
+.capture-row-mobile input[type="number"] {
+    width: 100px;
+    text-align: right;
+}
+
+.turno-total-mobile {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-top: 0.5rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ==========================================================================
+   LÓGICA DE VISIBILIDAD Y ANIMACIÓN PARA MÓVIL (CORREGIDA)
+   ========================================================================== */
+
+/* Por defecto, se muestra la vista de escritorio y se oculta la de móvil */
+.desktop-only-table {
+    display: block;
+}
+.mobile-only-view {
+    display: none;
+}
+
+/*
+  Se cambia a la vista móvil (tarjetas o mensaje de rotar) ÚNICAMENTE
+  cuando la pantalla es angosta Y está en orientación vertical.
+*/
+@media (max-width: 768px) and (orientation: portrait) {
+    .desktop-only-table {
+        display: none;
+    }
+    .mobile-only-view {
+        display: block;
+    }
+}
+
+/* Estilos para el mensaje y animación de rotar el teléfono */
+.rotate-device-prompt {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: var(--text-muted);
+    width: 100%;
+    min-height: 300px;
+}
+
+.phone-icon-container {
+    margin-bottom: 20px;
+}
+
+.phone-icon-container .phone-icon {
+    font-size: 5rem;
+    color: #adb5bd;
+    animation: rotate-animation 2.5s ease-in-out infinite;
+}
+
+@keyframes rotate-animation {
+    0% { transform: rotate(0); }
+    30% { transform: rotate(0); }
+    50% { transform: rotate(-90deg); }
+    80% { transform: rotate(-90deg); }
+    100% { transform: rotate(0); }
+}
+
+
+/* --- OTROS ESTILOS --- */
+.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.shortfall-cell { background-color: #ffeeba !important; color: #856404 !important; font-weight: bold; }
+
+.table-responsive thead th { position: -webkit-sticky; position: sticky; top: 0; z-index: 2; background-color: #e9ecef; }
+.table-responsive tbody td:first-child { position: -webkit-sticky; position: sticky; left: 0; z-index: 3; background-color: #f8f9fa; }
+.table-responsive thead th:first-child { left: 0; z-index: 4; }
