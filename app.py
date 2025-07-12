@@ -47,6 +47,18 @@ def now_mexico():
         import pytz
         return datetime.now(pytz.timezone("America/Mexico_City"))
 
+# --- NUEVA FUNCIÓN: Obtener la fecha del día operativo ---
+def get_business_date():
+    """
+    Determina la fecha del "día operativo".
+    El día cambia a las 7:30 AM. Antes de esa hora, se considera el día anterior.
+    """
+    now = now_mexico()
+    # Si la hora actual es antes de las 7:30 AM, consideramos que es el día operativo anterior.
+    if now.hour < 7 or (now.hour == 7 and now.minute < 30):
+        return (now - timedelta(days=1)).date()
+    return now.date()
+
 def check_and_send_notifications():
     with app.app_context():
         print(f"[{now_mexico()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
@@ -304,17 +316,15 @@ def get_heatmap_color_class(eficiencia):
 
 app.jinja_env.filters['heatmap_color'] = get_heatmap_color_class
 
-# --- NUEVO FILTRO PARA LAS INSIGNIAS DE LA VISTA MÓVIL ---
 def get_heatmap_badge_class(eficiencia):
     if eficiencia == 0: return 'badge-secondary'
     if eficiencia < 80: return 'badge-danger'
     if eficiencia < 95: return 'badge-warning'
     if eficiencia <= 105: return 'badge-success'
-    return 'badge-nidec' # Usaremos una clase personalizada para el verde Nidec
+    return 'badge-nidec'
 
 app.jinja_env.filters['heatmap_color_badge'] = get_heatmap_badge_class
 
-# NUEVA FUNCIÓN MEJORADA PARA OBTENER TODOS LOS DATOS DEL DASHBOARD
 def get_detailed_performance_data(selected_date):
     performance_data = {'IHP': {}, 'FHP': {}}
     all_areas = {'IHP': AREAS_IHP, 'FHP': AREAS_FHP}
@@ -334,16 +344,12 @@ def get_detailed_performance_data(selected_date):
                         'horas': {hora: 0 for hora in HORAS_TURNO[turno]}
                     }
         
-        # Llenar con pronósticos
         for p in pronosticos:
-            # --- CORRECCIÓN AQUÍ: Convertir el grupo a mayúsculas ---
             group_key = p.grupo.upper()
             if group_key in performance_data and p.area in performance_data[group_key]:
                 performance_data[group_key][p.area][p.turno]['pronostico'] = p.valor_pronostico or 0
         
-        # Llenar con producción por hora y calcular totales por turno
         for prod in produccion_horas:
-            # --- CORRECCIÓN AQUÍ: Convertir el grupo a mayúsculas ---
             group_key = prod.grupo.upper()
             for turno, horas_del_turno in HORAS_TURNO.items():
                 if prod.hora in horas_del_turno:
@@ -352,7 +358,6 @@ def get_detailed_performance_data(selected_date):
                         performance_data[group_key][prod.area][turno]['producido'] += prod.valor_producido or 0
                     break
         
-        # Calcular eficiencia final
         for group in performance_data:
             for area in performance_data[group]:
                 for turno in performance_data[group][area]:
@@ -371,48 +376,73 @@ def get_detailed_performance_data(selected_date):
 @login_required
 @role_required(['ADMIN'])
 def dashboard_admin():
-    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
-        selected_date = now_mexico().date()
+        selected_date = get_business_date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
-        flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
+        flash("Formato de fecha inválido. Mostrando datos del día operativo actual.", "warning")
+
+    # 1. Obtener todos los datos detallados de una vez
+    performance_data = get_detailed_performance_data(selected_date)
     
-    ihp_data = get_group_performance('IHP', selected_date_str)
-    fhp_data = get_group_performance('FHP', selected_date_str)
-    
-    total_pronostico = (int(ihp_data['pronostico'].replace(',', '')) + int(fhp_data['pronostico'].replace(',', '')))
-    total_producido = (int(ihp_data['producido'].replace(',', '')) + int(fhp_data['producido'].replace(',', '')))
-    total_eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
-    
-    global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
-    
-    # --- CAMBIO: Usar la nueva función para obtener todos los datos ---
-    detailed_data = get_detailed_performance_data(selected_date)
-    
-    today = now_mexico().date()
-    
-    if selected_date == today:
-        period_label = f"Hoy ({selected_date_str})"
-    else:
-        period_label = f"Día: {selected_date_str}"
-        
+    # 2. Añadir datos de output a la estructura principal
     output_data_ihp = get_output_data('IHP', selected_date_str)
     output_data_fhp = get_output_data('FHP', selected_date_str)
+    performance_data['IHP']['Output'] = {'pronostico': output_data_ihp.get('pronostico', 0), 'producido': output_data_ihp.get('output', 0)}
+    performance_data['FHP']['Output'] = {'pronostico': output_data_fhp.get('pronostico', 0), 'producido': output_data_fhp.get('output', 0)}
+
+    # 3. Calcular KPIs a partir de los datos obtenidos para evitar nuevas llamadas a la BD
+    total_pronostico = 0
+    total_producido = 0
+    group_kpis = {}
+
+    for group, areas in performance_data.items():
+        group_pronostico = 0
+        group_producido = 0
+        for area, data in areas.items():
+            if area == 'Output':
+                group_pronostico += data.get('pronostico', 0)
+                group_producido += data.get('producido', 0)
+            else:
+                for turno, turno_data in data.items():
+                    group_pronostico += turno_data.get('pronostico', 0)
+                    group_producido += turno_data.get('producido', 0)
         
+        total_pronostico += group_pronostico
+        total_producido += group_producido
+        
+        group_eficiencia = (group_producido / group_pronostico * 100) if group_pronostico > 0 else 0
+        group_kpis[group] = {
+            'pronostico': f"{group_pronostico:,.0f}",
+            'producido': f"{group_producido:,.0f}",
+            'eficiencia': round(group_eficiencia, 2)
+        }
+
+    total_eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
+    global_kpis = {
+        'pronostico': f"{total_pronostico:,.0f}",
+        'producido': f"{total_producido:,.0f}",
+        'eficiencia': round(total_eficiencia, 2)
+    }
+
+    # 4. Establecer la etiqueta del período
+    business_today = get_business_date()
+    period_label = f"Hoy ({selected_date_str})" if selected_date == business_today else f"Día: {selected_date_str}"
+
     return render_template(
         'dashboard_admin.html', 
         period_label=period_label, 
         selected_date=selected_date_str, 
         global_kpis=global_kpis,
-        ihp_data=ihp_data, 
-        fhp_data=fhp_data, 
-        performance_data=detailed_data, # Pasamos los nuevos datos detallados
+        ihp_data=group_kpis.get('IHP', {}), 
+        fhp_data=group_kpis.get('FHP', {}), 
         nombres_turnos=NOMBRES_TURNOS,
-        horas_turno=HORAS_TURNO, # Necesitamos esto en la plantilla
-        output_data_ihp=output_data_ihp,
-        output_data_fhp=output_data_fhp
+        horas_turno=HORAS_TURNO,
+        performance_data=performance_data,
+        AREAS_IHP=AREAS_IHP,
+        AREAS_FHP=AREAS_FHP
     )
 
 @app.route('/dashboard/<group>')
@@ -424,8 +454,9 @@ def dashboard_group(group):
         flash('No tienes permiso para ver este dashboard.', 'danger')
         return redirect(url_for('dashboard'))
     
-    today_str = now_mexico().strftime('%Y-%m-%d')
-    yesterday_str = (now_mexico() - timedelta(days=1)).strftime('%Y-%m-%d')
+    business_today = get_business_date()
+    today_str = business_today.strftime('%Y-%m-%d')
+    yesterday_str = (business_today - timedelta(days=1)).strftime('%Y-%m-%d')
     
     summary_today = get_group_performance(group_upper, today_str)
     summary_yesterday = get_group_performance(group_upper, yesterday_str)
@@ -440,7 +471,6 @@ def dashboard_group(group):
     performance_data = get_performance_data_from_db(group_upper, today_str)
     areas_list = [a for a in (AREAS_IHP if group_upper == 'IHP' else AREAS_FHP) if a != 'Output']
     
-    # --- CAMBIO: Pre-calcular la eficiencia para cada turno/área ---
     for area in performance_data:
         for turno in performance_data[area]:
             turno_data = performance_data[area][turno]
@@ -461,7 +491,7 @@ def dashboard_group(group):
                            today=today_str, 
                            group_name=group_upper,
                            output_data=output_data,
-                           horas_turno=HORAS_TURNO) # Se añade esto para la vista móvil
+                           horas_turno=HORAS_TURNO)
 
 @app.route('/registro/<group>')
 @login_required
@@ -473,8 +503,14 @@ def registro(group):
         flash('No tienes permiso para ver este registro.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
-    selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+    selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
+    try:
+        selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        selected_date = get_business_date()
+        selected_date_str = selected_date.strftime('%Y-%m-%d')
+        flash("Formato de fecha inválido. Mostrando datos del día operativo actual.", "warning")
+
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
     
     production_data = get_performance_data_from_db(group_upper, selected_date_str)
@@ -601,7 +637,6 @@ def captura(group):
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
         capture_date = now_mexico().date()
         
-        # CAMBIO: Se genera una nota de auditoría si las fechas no coinciden
         audit_note = ""
         if selected_date != capture_date:
             audit_note = f" (Capturado el {capture_date.strftime('%Y-%m-%d')} para la fecha {selected_date_str})."
@@ -628,14 +663,12 @@ def captura(group):
                             if old_val != new_val:
                                 existing.valor_pronostico = new_val
                                 changes_detected = True
-                                # CAMBIO: Se añade la nota de auditoría al detalle
                                 details = f"Área: {area}, Turno: {turno}. Valor: {old_val} -> {new_val}.{audit_note}"
                                 log_activity("Modificación Pronóstico", details, group_upper, 'Datos', 'Info')
                         else:
                             new_entry = Pronostico(fecha=selected_date, grupo=group_upper, area=area, turno=turno, valor_pronostico=new_val)
                             db_session.add(new_entry)
                             changes_detected = True
-                            # CAMBIO: Se añade la nota de auditoría al detalle
                             details = f"Área: {area}, Turno: {turno}. Valor: {new_val}.{audit_note}"
                             log_activity("Creación Pronóstico", details, group_upper, 'Datos', 'Info')
                 
@@ -651,14 +684,12 @@ def captura(group):
                                 existing.usuario_captura = session.get('username')
                                 existing.fecha_captura = now_dt
                                 changes_detected = True
-                                # CAMBIO: Se añade la nota de auditoría al detalle
                                 details = f"Área: {area}, Hora: {hora}. Valor: {old_val} -> {new_val}.{audit_note}"
                                 log_activity("Modificación Producción", details, group_upper, 'Datos', 'Info')
                         else:
                             new_entry = ProduccionCaptura(fecha=selected_date, grupo=group_upper, area=area, hora=hora, valor_producido=new_val, usuario_captura=session.get('username'), fecha_captura=now_dt)
                             db_session.add(new_entry)
                             changes_detected = True
-                            # CAMBIO: Se añade la nota de auditoría al detalle
                             details = f"Área: {area}, Hora: {hora}. Valor: {new_val}.{audit_note}"
                             log_activity("Creación Producción", details, group_upper, 'Datos', 'Info')
             
@@ -669,13 +700,11 @@ def captura(group):
                 old_prod = existing_output.output or 0
                 if new_pron_out_str.isdigit() and int(new_pron_out_str) != old_pron:
                     changes_detected = True
-                    # CAMBIO: Se añade la nota de auditoría al detalle
                     details = f"Valor: {old_pron} -> {new_pron_out_str}.{audit_note}"
                     log_activity("Modificación Output Pronóstico", details, group_upper, 'Datos', 'Info')
                     existing_output.pronostico = int(new_pron_out_str)
                 if new_prod_out_str.isdigit() and int(new_prod_out_str) != old_prod:
                     changes_detected = True
-                    # CAMBIO: Se añade la nota de auditoría al detalle
                     details = f"Valor: {old_prod} -> {new_prod_out_str}.{audit_note}"
                     log_activity("Modificación Output Producción", details, group_upper, 'Datos', 'Info')
                     existing_output.output = int(new_prod_out_str)
@@ -683,7 +712,6 @@ def captura(group):
                 changes_detected = True
                 new_output = OutputData(fecha=selected_date, grupo=group_upper, pronostico=int(new_pron_out_str or 0), output=int(new_prod_out_str or 0), usuario_captura=session.get('username'), fecha_captura=now_dt)
                 db_session.add(new_output)
-                # CAMBIO: Se añade la nota de auditoría al detalle
                 details = f"Pronóstico: {new_pron_out_str}, Producción: {new_prod_out_str}.{audit_note}"
                 log_activity("Creación Output", details, group_upper, 'Datos', 'Info')
             
@@ -695,8 +723,14 @@ def captura(group):
             flash(f"Error al guardar en la base de datos: {e}", 'danger')
         return redirect(url_for('captura', group=group, fecha=selected_date_str))
         
-    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
-    selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+    selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
+    try:
+        selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+    except ValueError:
+        selected_date = get_business_date()
+        selected_date_str = selected_date.strftime('%Y-%m-%d')
+        flash("Formato de fecha inválido. Mostrando datos del día operativo actual.", "warning")
+
     data_for_template = get_structured_capture_data(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date_str)
     return render_template('captura_group.html', areas=areas_list, horas_turno=HORAS_TURNO, nombres_turnos=NOMBRES_TURNOS, selected_date=selected_date_str, data=data_for_template, output_data=output_data, group_name=group_upper)
@@ -739,7 +773,7 @@ def export_excel(group):
         flash('No tienes permiso para exportar estos datos.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
+    selected_date = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
     production_data = get_performance_data_from_db(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date)
     
