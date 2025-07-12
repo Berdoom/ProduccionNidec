@@ -12,6 +12,10 @@
     --text-dark: #212529;
     --text-muted: #6c757d;
     --border-color: #dee2e6;
+    
+    /* ### CAMBIO ###: Colores de estado para celdas/inputs */
+    --status-ontrack-bg: #d4edda; /* Verde éxito */
+    --status-behind-bg: #fff3cd; /* Amarillo advertencia */
 }
 
 body {
@@ -143,15 +147,11 @@ tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
 /* =================================================================
    ESTILOS PARA EL DASHBOARD DE ADMINISTRADOR (VERSIÓN FINAL)
 ================================================================= */
-
-/* --- Estilos para las Ruedas de Progreso de KPIs --- */
 .kpi-wheel-card { padding: 1.5rem; background: var(--white); border-radius: 1rem; box-shadow: 0 5px 20px rgba(0,0,0,0.07); transition: transform 0.2s ease; }
 .kpi-wheel-card:hover { transform: translateY(-5px); }
 .circular-progress-kpi { position: relative; height: 160px; width: 160px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: conic-gradient(var(--gradient-color) calc(var(--value) * 1%), #ededed 0); }
 .circular-progress-kpi::before { content: ""; position: absolute; height: 88%; width: 88%; background-color: var(--white); border-radius: 50%; }
 .circular-progress-kpi .progress-value { position: relative; font-size: 2.5rem; font-weight: 700; color: #333; }
-
-/* --- Estilos para las Tablas Consolidadas de Admin --- */
 .group-performance-table { border-collapse: separate; border-spacing: 0; }
 .group-performance-table thead th { font-weight: 600; vertical-align: middle; white-space: nowrap; }
 .group-performance-table .area-name-cell { font-weight: 700; background-color: #f8f9fa; width: 12%; vertical-align: middle; position: sticky; left: 0; z-index: 2; }
@@ -160,8 +160,6 @@ tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
 .group-performance-table .hourly-data-cell { background-color: #fdfdfd; color: var(--text-muted); font-size: 0.9em; }
 .group-performance-table .efficiency-cell { min-width: 120px; }
 .group-performance-table .progress-bar { color: #212529; text-shadow: 0 0 3px rgba(255,255,255,0.7); }
-
-/* --- Colores para Dashboard Admin --- */
 .heatmap-zero { --gradient-color: #e0e0e0; }
 .heatmap-danger { --gradient-color: #dc3545; }
 .heatmap-warning { --gradient-color: #ffc107; }
@@ -172,25 +170,11 @@ tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
 .progress-bar.heatmap-success { background-color: #d4edda !important; }
 .progress-bar.heatmap-excellent { background-color: #a3e9b3 !important; }
 .progress-bar.heatmap-zero { background-color: #f8f9fa !important; color: #6c757d !important; }
-
-/* --- Lógica de Visibilidad para Dashboard Admin --- */
 .desktop-only-table { display: block; }
 .mobile-only-view { display: none; }
 .rotate-device-prompt { display: none; }
-
-@media (max-width: 991.98px) and (orientation: landscape) {
-    .desktop-only-table { display: block; }
-    .mobile-only-view { display: none; }
-}
-
-@media (max-width: 991.98px) and (orientation: portrait) {
-    .desktop-only-table { display: none; }
-    .mobile-only-view { display: block; }
-    .rotate-device-prompt { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 1rem; background-color: var(--nidec-green-light); border: 1px dashed var(--nidec-green); border-radius: .5rem; color: var(--nidec-green-dark); font-weight: 500; margin-bottom: 1.5rem; text-align: center; }
-    .rotate-device-prompt .fa-sync-alt { animation: fa-spin 2s linear infinite; }
-}
-
-/* --- Estilos para Acordeón Móvil de Dashboard Admin --- */
+@media (max-width: 991.98px) and (orientation: landscape) { .desktop-only-table { display: block; } .mobile-only-view { display: none; } }
+@media (max-width: 991.98px) and (orientation: portrait) { .desktop-only-table { display: none; } .mobile-only-view { display: block; } .rotate-device-prompt { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 1rem; background-color: var(--nidec-green-light); border: 1px dashed var(--nidec-green); border-radius: .5rem; color: var(--nidec-green-dark); font-weight: 500; margin-bottom: 1.5rem; text-align: center; } .rotate-device-prompt .fa-sync-alt { animation: fa-spin 2s linear infinite; } }
 .mobile-accordion .card { border: 1px solid var(--border-color); margin-bottom: .5rem; }
 .mobile-accordion .card-header { background-color: var(--nidec-green-light); padding: 0; }
 .mobile-accordion .card-header button { font-weight: 600; color: var(--nidec-green-dark); text-decoration: none; padding: .75rem 1.25rem; }
@@ -198,3 +182,13 @@ tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
 .mobile-accordion .shift-header { background-color: #fff; font-weight: 500; }
 .mobile-accordion .shift-header button { color: var(--text-dark); }
 .mobile-accordion .badge { font-size: 100%; vertical-align: middle; }
+
+/* ### CAMBIO ###: Nuevas clases para colorear inputs y celdas */
+.input-ontrack, .cell-ontrack {
+    background-color: var(--status-ontrack-bg) !important;
+    transition: background-color 0.3s ease;
+}
+.input-behind, .cell-behind {
+    background-color: var(--status-behind-bg) !important;
+    transition: background-color 0.3s ease;
+}
