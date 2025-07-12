@@ -13,47 +13,6 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
-    <!-- Estilos en línea para funcionalidades específicas -->
-    <style>
-        /* Reglas de Diseño Responsivo */
-        /* Por defecto (Móvil Primero): se muestra el acordeón y el botón/enlace superior. */
-        .accordion-responsive, .report-problem-mobile {
-            display: block;
-        }
-        
-        /* Se oculta la vista de escritorio y el botón flotante por defecto. */
-        .desktop-only, .report-problem-desktop {
-            display: none;
-        }
-
-        /* En pantallas medianas (tablets, 768px) y más grandes (escritorios) */
-        @media (min-width: 768px) {
-            /* Se oculta la vista de móvil. */
-            .accordion-responsive, .report-problem-mobile {
-                display: none;
-            }
-            
-            /* Se muestra la vista de escritorio. */
-            .desktop-only, .report-problem-desktop {
-                display: block;
-            }
-        }
-
-        /* Estilo para los inputs de pronóstico en la tabla de captura */
-        .pronostico-turno-input {
-            background-color: #e6ffed !important;
-            border-color: #28a745 !important;
-            font-weight: bold;
-        }
-
-        /* Contenedor para el nuevo ícono de advertencia */
-        .validation-icon-container {
-            display: inline-block;
-            margin-left: 8px;
-            font-size: 1rem;
-            color: #ffc107; /* Color amarillo de advertencia */
-        }
-    </style>
 </head>
 <body>
     {% if session.get('loggedin') %}
@@ -79,6 +38,18 @@
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
+            
+            <div class="d-lg-none">
+                {% if session.role == 'ADMIN' %}
+                    <a class="nav-link notification-bell text-white" href="{{ url_for('centro_acciones') }}" title="Centro de Acciones">
+                        <i class="fas fa-bell"></i>
+                        {% if pending_actions_count > 0 %}
+                        <span class="badge badge-danger notification-badge">{{ pending_actions_count }}</span>
+                        {% endif %}
+                    </a>
+                {% endif %}
+            </div>
+
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mr-auto">
                     <!-- Menú para usuarios IHP/FHP -->
@@ -91,11 +62,24 @@
                     <!-- Menú para Administradores -->
                     {% elif session.role == 'ADMIN' %}
                         <li class="nav-item {% if 'dashboard_admin' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard Admin</a></li>
-                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownIHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">IHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownIHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='ihp') }}">Dashboard IHP</a><a class="dropdown-item" href="{{ url_for('captura', group='ihp') }}">Captura IHP</a><a class="dropdown-item" href="{{ url_for('registro', group='ihp') }}">Registro IHP</a></div></li>
-                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownIHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-industry mr-1"></i>IHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownIHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='ihp') }}">Dashboard IHP</a><a class="dropdown-item" href="{{ url_for('captura', group='ihp') }}">Captura IHP</a><a class="dropdown-item" href="{{ url_for('registro', group='ihp') }}">Registro IHP</a></div></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs mr-1"></i>FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
-                        <li class="nav-item {% if 'centro_acciones' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('centro_acciones') }}"><i class="fas fa-inbox fa-fw mr-1"></i>Centro de Acciones</a></li>
-                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs mr-1"></i>Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
+                        <li class="nav-item {% if 'centro_acciones' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('centro_acciones') }}"><i class="fas fa-bell mr-1"></i>Centro de Acciones</a></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-tools mr-1"></i>Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
+                    {% endif %}
+                </ul>
+                <!-- Lado derecho de la Navbar (Escritorio) -->
+                <ul class="navbar-nav ml-auto d-none d-lg-flex">
+                    {% if session.role == 'ADMIN' %}
+                    <li class="nav-item">
+                        <a class="nav-link notification-bell" href="{{ url_for('centro_acciones') }}" title="Centro de Acciones">
+                            <i class="fas fa-bell"></i>
+                            {% if pending_actions_count > 0 %}
+                            <span class="badge badge-danger notification-badge">{{ pending_actions_count }}</span>
+                            {% endif %}
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
                 <!-- Información de usuario para Móvil (dentro del menú hamburguesa) -->

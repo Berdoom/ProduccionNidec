@@ -34,9 +34,10 @@
             <div class="form-group col-md-2">
                 <label for="status">Estado:</label>
                 <select id="status" name="status" class="form-control">
+                    <option value="Pendientes" {% if filtros.get('status') == 'Pendientes' %}selected{% endif %}>Pendientes</option>
                     <option value="Todos">Todos</option>
-                    <option value="Pendiente" {% if filtros.get('status') == 'Pendiente' %}selected{% endif %}>Pendiente</option>
                     <option value="Nuevo" {% if filtros.get('status') == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                    <option value="Pendiente" {% if filtros.get('status') == 'Pendiente' %}selected{% endif %}>Pendiente</option>
                     <option value="En Proceso" {% if filtros.get('status') == 'En Proceso' %}selected{% endif %}>En Proceso</option>
                     <option value="Resuelto" {% if filtros.get('status') == 'Resuelto' %}selected{% endif %}>Resuelto</option>
                 </select>
@@ -49,42 +50,57 @@
     </form>
 </div>
 
-<div class="content-section">
+<div class="row">
     {% for item in items %}
-    <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-                <strong>{{ item.tipo }}</strong> en {{ item.area }} ({{ item.grupo }} - {{ item.turno }})
-                <small class="text-muted">| Evento: {{ item.fecha_evento.strftime('%Y-%m-%d') }} | Reportado por: {{ item.usuario }}</small>
+    <div class="col-lg-6 mb-4">
+        <div class="card action-card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <strong class="card-title-text">
+                        {% if 'Corrección' in item.tipo %}
+                            <i class="fas fa-wrench text-info mr-2"></i>Solicitud de Corrección
+                        {% else %}
+                            <i class="fas fa-exclamation-triangle text-warning mr-2"></i>Justificación de Desviación
+                        {% endif %}
+                    </strong>
+                    <span class="badge badge-pill {% if item.status in ['Nuevo', 'Pendiente'] %}badge-warning{% elif item.status == 'En Proceso' %}badge-info{% else %}badge-success{% endif %}">{{ item.status }}</span>
+                </div>
+                <small class="text-muted">{{ item.fecha_evento.strftime('%Y-%m-%d') }}</small>
             </div>
-            <span class="badge badge-pill {% if item.status in ['Nuevo', 'Pendiente'] %}badge-warning{% elif item.status == 'En Proceso' %}badge-info{% else %}badge-success{% endif %}">{{ item.status }}</span>
-        </div>
-        <div class="card-body">
-            <p class="card-text">{{ item.detalles }}</p>
-            <hr>
-            <form method="POST" action="{{ url_for('update_solicitud_status', solicitud_id=item.id) if 'Corrección' in item.tipo else url_for('update_reason_status', reason_id=item.id) }}">
-                 <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
-                 <div class="form-row align-items-center">
-                    <div class="col-md-4">
-                        <select name="status" class="form-control">
-                            <option value="Pendiente" {% if item.status == 'Pendiente' %}selected{% endif %}>Pendiente</option>
-                            <option value="Nuevo" {% if item.status == 'Nuevo' %}selected{% endif %}>Nuevo</option>
-                            <option value="En Proceso" {% if item.status == 'En Proceso' %}selected{% endif %}>En Proceso</option>
-                            <option value="Resuelto" {% if item.status == 'Resuelto' %}selected{% endif %}>Resuelto</option>
-                        </select>
-                    </div>
-                    {% if 'Corrección' in item.tipo %}
-                    <div class="col-md-6">
-                        <input type="text" name="admin_notas" class="form-control" placeholder="Añadir notas de resolución...">
-                    </div>
-                    {% endif %}
-                    <div class="col-md-2"><button type="submit" class="btn btn-sm btn-primary btn-block">Actualizar</button></div>
-                 </div>
-            </form>
+            <div class="card-body">
+                <p><strong>Grupo:</strong> {{ item.grupo }} | <strong>Área:</strong> {{ item.area }} | <strong>Turno:</strong> {{ item.turno }}</p>
+                <p class="card-text bg-light p-3 rounded">"{{ item.detalles }}"</p>
+                <p class="text-muted small">Reportado por: <strong>{{ item.usuario }}</strong> el {{ (item.timestamp.strftime('%d/%m/%Y %H:%M') if item.timestamp else 'N/A') }}</p>
+            </div>
+            <div class="card-footer bg-white">
+                <form method="POST" action="{{ url_for('update_solicitud_status', solicitud_id=item.id) if 'Corrección' in item.tipo else url_for('update_reason_status', reason_id=item.id) }}">
+                     <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                     <div class="form-row align-items-center">
+                        <div class="col-md-5">
+                            <select name="status" class="form-control form-control-sm">
+                                <option value="Pendiente" {% if item.status == 'Pendiente' %}selected{% endif %}>Pendiente</option>
+                                <option value="Nuevo" {% if item.status == 'Nuevo' %}selected{% endif %}>Nuevo</option>
+                                <option value="En Proceso" {% if item.status == 'En Proceso' %}selected{% endif %}>En Proceso</option>
+                                <option value="Resuelto" {% if item.status == 'Resuelto' %}selected{% endif %}>Resuelto</option>
+                            </select>
+                        </div>
+                        {% if 'Corrección' in item.tipo %}
+                        <div class="col-md-7">
+                            <input type="text" name="admin_notas" class="form-control form-control-sm" placeholder="Añadir notas de resolución...">
+                        </div>
+                        {% endif %}
+                        <div class="col-12 mt-2">
+                            <button type="submit" class="btn btn-sm btn-primary btn-block">Actualizar Estado</button>
+                        </div>
+                     </div>
+                </form>
+            </div>
         </div>
     </div>
     {% else %}
-    <p class="text-center text-muted">No hay ítems que coincidan con los filtros aplicados.</p>
+    <div class="col-12">
+        <p class="text-center text-muted mt-5">¡Excelente! No hay acciones pendientes que coincidan con los filtros aplicados.</p>
+    </div>
     {% endfor %}
 </div>
 {% endblock %}
