@@ -76,15 +76,19 @@
                 </tr>
             </thead>
             <tbody>
-                {% for area, turnos in areas_data.items() %}
+                {# CAMBIO: Iterar sobre la lista de áreas, no sobre areas_data.items() #}
+                {% set areas_list = AREAS_IHP if group == 'IHP' else AREAS_FHP %}
+                {% for area in areas_list if area != 'Output' %}
                 <tr>
                     <td class="area-name-cell">{{ area }}</td>
                     {% for turno_name in nombres_turnos %}
-                        {% set turno_data = turnos[turno_name] %}
-                        {% set eficiencia = turno_data.eficiencia %}
-                        <td class="text-center font-weight-bold">{{ turno_data.pronostico }}</td>
-                        {% for hora in horas_turno[turno_name] %}<td class="text-center hourly-data-cell">{{ turno_data.horas.get(hora, '-') }}</td>{% endfor %}
-                        <td class="text-center font-weight-bold">{{ turno_data.producido }}</td>
+                        {% set turno_data = areas_data.get(area, {}).get(turno_name, {}) %}
+                        {% set eficiencia = turno_data.get('eficiencia', 0) %}
+                        <td class="text-center font-weight-bold">{{ turno_data.get('pronostico', 0) }}</td>
+                        {% for hora in horas_turno[turno_name] %}
+                            <td class="text-center hourly-data-cell">{{ turno_data.get('horas', {}).get(hora, '-') }}</td>
+                        {% endfor %}
+                        <td class="text-center font-weight-bold">{{ turno_data.get('producido', 0) }}</td>
                         <td class="text-center efficiency-cell">
                             <div class="progress" style="height: 22px; font-size: 0.9rem;">
                                 <div class="progress-bar font-weight-bold {{ eficiencia|heatmap_color }}" role="progressbar" style="width: {{ eficiencia }}%;" aria-valuenow="{{ eficiencia }}" aria-valuemin="0" aria-valuemax="100">{{ "%.1f"|format(eficiencia) }}%</div>
