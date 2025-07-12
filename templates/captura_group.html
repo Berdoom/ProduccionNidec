@@ -116,7 +116,7 @@
                                 <li class="list-group-item">
                                     <strong>{{ hora }}:</strong>
                                     <input type="number" value="{{ turno_data.get(hora, '') | e }}" 
-                                           class="form-control-sm adaptive-font" style="width: 100px; float: right;" 
+                                           class="form-control-sm adaptive-font produccion-hora-input" style="width: 100px; float: right;" 
                                            oninput="syncAndCalc('produccion', '{{ area_slug }}', '{{ hora }}', this.value)">
                                 </li>
                                 {% endfor %}
@@ -186,9 +186,9 @@
     function updateInputFontSize(input) {
         const len = input.value.length;
         input.classList.remove('input-font-sm', 'input-font-xs');
-        if (len >= 5) { // 5 o más dígitos
+        if (len >= 5) {
             input.classList.add('input-font-xs');
-        } else if (len === 4) { // Exactamente 4 dígitos
+        } else if (len === 4) {
             input.classList.add('input-font-sm');
         }
     }
@@ -206,6 +206,7 @@
     }
     
     function handleValidationIconClick(container) {
+        // Solo abre el modal si el ícono es el de advertencia (tiene la clase 'clickable-icon')
         if (container.classList.contains('clickable-icon')) {
             document.getElementById('modalDate').value = container.dataset.date;
             document.getElementById('modalArea').value = container.dataset.areaName;
@@ -216,69 +217,92 @@
     }
 
     function calculateAllTotals(areaSlug) {
-        const row = document.querySelector(`tr[data-area-slug="${areaSlug}"]`);
-        if (!row) return;
+        const desktopRow = document.querySelector(`tr[data-area-slug="${areaSlug}"]`);
+        const areaName = desktopRow ? desktopRow.dataset.areaName : '';
 
-        const areaName = row.dataset.areaName;
         let totalPronosticoArea = 0;
         let totalProduccionArea = 0;
 
         NOMBRES_TURNOS_JS.forEach(turnoName => {
             const turnoSlug = toSlug(turnoName);
-            const pronosticoInput = row.querySelector(`input[name="pronostico_${areaSlug}_${turnoSlug}"]`);
+            const pronosticoInput = document.querySelector(`input[name="pronostico_${areaSlug}_${turnoSlug}"]`);
             const pronosticoValor = Number(pronosticoInput.value) || 0;
 
+            const numHoras = HORAS_TURNO_JS[turnoName] ? HORAS_TURNO_JS[turnoName].length : 0;
+            const targetPorHora = (pronosticoValor > 0 && numHoras > 0) ? pronosticoValor / numHoras : 0;
+
             let totalProduccionTurno = 0;
-            let allInputsFilled = true;
+            let allInputsFilled = true; // ### CAMBIO CLAVE ###: Bandera para la condición del usuario
 
             HORAS_TURNO_JS[turnoName].forEach(hora => {
-                const produccionInput = row.querySelector(`input[name="produccion_${areaSlug}_${hora}"]`);
+                const produccionInput = document.querySelector(`input[name="produccion_${areaSlug}_${hora}"]`);
+                if (!produccionInput) return;
+                
+                // Si algún campo del turno está vacío, la condición no se cumple
                 if (produccionInput.value === '') {
                     allInputsFilled = false;
                 }
-                totalProduccionTurno += Number(produccionInput.value) || 0;
+                
+                const valorActual = Number(produccionInput.value) || 0;
+                totalProduccionTurno += valorActual;
+
+                produccionInput.classList.remove('input-ontrack', 'input-behind');
+                if (targetPorHora > 0 && produccionInput.value !== '') {
+                    if (valorActual >= targetPorHora) {
+                        produccionInput.classList.add('input-ontrack');
+                    } else {
+                        produccionInput.classList.add('input-behind');
+                    }
+                }
             });
             
-            row.querySelector(`#total_produccion_turno_${areaSlug}_${turnoSlug}`).textContent = totalProduccionTurno;
-            const mobileTotalSpan = document.getElementById(`mobile_total_produccion_turno_${areaSlug}_${turnoSlug}`);
-            if (mobileTotalSpan) mobileTotalSpan.textContent = totalProduccionTurno;
+            const totalTurnoSpans = document.querySelectorAll(`#total_produccion_turno_${areaSlug}_${turnoSlug}, #mobile_total_produccion_turno_${areaSlug}_${turnoSlug}`);
+            totalTurnoSpans.forEach(span => span.textContent = totalProduccionTurno);
             
             totalProduccionArea += totalProduccionTurno;
             totalPronosticoArea += pronosticoValor;
 
+            // ### CAMBIO CLAVE ###: Lógica refactorizada para mostrar/ocultar el ícono
             const hasExistingReason = PRONOSTICOS_DATA_JS[areaName]?.[turnoName]?.razon_desviacion;
-            const iconContainer = document.getElementById(`validation_icon_container_${areaSlug}_${turnoSlug}`);
-            const mobileIconContainer = document.getElementById(`mobile_validation_icon_container_${areaSlug}_${turnoSlug}`);
+            const iconContainers = document.querySelectorAll(`#validation_icon_container_${areaSlug}_${turnoSlug}, #mobile_validation_icon_container_${areaSlug}_${turnoSlug}`);
             
-            [iconContainer, mobileIconContainer].forEach(container => {
+            iconContainers.forEach(container => {
                 if(container) {
+                    // 1. Limpiar estado previo
                     container.innerHTML = '';
                     container.classList.remove('clickable-icon');
                     container.style.cursor = 'default';
 
+                    // 2. Evaluar condiciones en orden de prioridad
                     if (hasExistingReason) {
+                        // Prioridad 1: Si ya hay una razón, mostrar check verde y no hacer nada más.
                         container.innerHTML = '<i class="fas fa-check-circle text-success" title="Razón ya enviada"></i>';
                     } else if (allInputsFilled && pronosticoValor > 0 && totalProduccionTurno < pronosticoValor) {
-                        container.innerHTML = '<i class="fas fa-exclamation-triangle" title="Justificar desviación"></i>';
-                        container.classList.add('clickable-icon');
+                        // Prioridad 2: Si se cumplen TODAS las condiciones del usuario, mostrar advertencia.
+                        container.innerHTML = '<i class="fas fa-exclamation-triangle text-warning" title="Justificar desviación"></i>';
+                        container.classList.add('clickable-icon'); // Hacerlo clickable
                         container.style.cursor = 'pointer';
                     }
+                    // Si no se cumple ninguna de las condiciones anteriores, el ícono permanece vacío (ya se limpió).
                 }
             });
         });
 
-        row.querySelector(`#total_pronostico_area_${areaSlug}`).textContent = totalPronosticoArea;
-        row.querySelector(`#total_produccion_area_${areaSlug}`).textContent = totalProduccionArea;
+        if(desktopRow) {
+            desktopRow.querySelector(`#total_pronostico_area_${areaSlug}`).textContent = totalPronosticoArea;
+            desktopRow.querySelector(`#total_produccion_area_${areaSlug}`).textContent = totalProduccionArea;
+        }
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('tr[data-area-slug]').forEach(row => calculateAllTotals(row.dataset.areaSlug));
+        document.querySelectorAll('[data-area-slug]').forEach(row => calculateAllTotals(row.dataset.areaSlug));
         
         document.querySelectorAll('input.adaptive-font').forEach(input => {
             updateInputFontSize(input);
             input.addEventListener('input', () => updateInputFontSize(input));
         });
 
+        // El resto del código JS no necesita cambios...
         const reportForm = document.getElementById('reportProblemForm');
         if (reportForm) {
             reportForm.addEventListener('submit', function(e) {
@@ -329,8 +353,7 @@
         const areaName = document.getElementById('modalArea').value;
         const turnoName = document.getElementById('modalTurno').value;
         const areaSlug = toSlug(areaName);
-        const turnoSlug = toSlug(turnoName);
-
+        
         $.ajax({
             url: submitUrl,
             type: "POST",
@@ -344,12 +367,12 @@
             },
             success: function(response) {
                 if (response.status === 'success') {
-                    if (PRONOSTICOS_DATA_JS[areaName]) {
-                        if (!PRONOSTICOS_DATA_JS[areaName][turnoName]) {
-                            PRONOSTICOS_DATA_JS[areaName][turnoName] = {};
-                        }
-                        PRONOSTICOS_DATA_JS[areaName][turnoName].razon_desviacion = reasonText;
-                    }
+                    // Actualizar el estado en el objeto JS para que el ícono cambie a 'check'
+                    if (!PRONOSTICOS_DATA_JS[areaName]) PRONOSTICOS_DATA_JS[areaName] = {};
+                    if (!PRONOSTICOS_DATA_JS[areaName][turnoName]) PRONOSTICOS_DATA_JS[areaName][turnoName] = {};
+                    PRONOSTICOS_DATA_JS[areaName][turnoName].razon_desviacion = reasonText;
+                    
+                    // Volver a calcular para que se actualice la UI
                     calculateAllTotals(areaSlug);
                     alert(response.message);
                 } else {
