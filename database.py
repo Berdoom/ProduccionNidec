@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text, func
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from werkzeug.security import generate_password_hash
@@ -28,19 +28,15 @@ if not DATABASE_URL:
             print(f"FATAL ERROR: No se pudo crear la ruta para la base de datos local: {e}", file=sys.stderr)
             sys.exit(1)
 
-# ### CAMBIO ###: Modificación para PostgreSQL en Render
-is_production = DATABASE_URL.startswith("postgres")
-if is_production:
+if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     print("Configurando conexión a la base de datos PostgreSQL de producción...")
-    # Para PostgreSQL, es mejor usar la opción con zona horaria.
-    engine = create_engine(DATABASE_URL)
 else:
     db_type = DATABASE_URL.split(':')[0]
     print(f"Configurando conexión a la base de datos local del tipo: {db_type}...")
-    engine = create_engine(DATABASE_URL)
 
 try:
+    engine = create_engine(DATABASE_URL)
     db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 except Exception as e:
     print(f"FATAL ERROR: No se pudo crear el motor de la base de datos con la URL proporcionada: {e}", file=sys.stderr)
@@ -48,10 +44,6 @@ except Exception as e:
 
 Base = declarative_base()
 Base.query = db_session.query_property()
-
-# ### CAMBIO ###: Especificar que la columna DateTime debe manejar zonas horarias en producción
-# SQLAlchemy manejará la conversión para SQLite que no tiene un tipo de dato nativo para esto.
-DateTimeTZ = DateTime(timezone=True) if is_production else DateTime
 
 class Usuario(Base):
     __tablename__ = 'usuarios'
@@ -81,8 +73,7 @@ class Pronostico(Base):
     valor_pronostico = Column(Integer)
     razon_desviacion = Column(Text)
     usuario_razon = Column(String(80))
-    # ### CAMBIO ###: Usar DateTime con zona horaria
-    fecha_razon = Column(DateTimeTZ)
+    fecha_razon = Column(DateTime)
     status = Column(String(50), default='Nuevo', index=True)
 
 class ProduccionCaptura(Base):
@@ -94,14 +85,12 @@ class ProduccionCaptura(Base):
     hora = Column(String(10), nullable=False)
     valor_producido = Column(Integer)
     usuario_captura = Column(String(80))
-    # ### CAMBIO ###: Usar DateTime con zona horaria y server_default
-    fecha_captura = Column(DateTimeTZ, server_default=func.now())
+    fecha_captura = Column(DateTime, default=datetime.utcnow)
 
 class ActivityLog(Base):
     __tablename__ = 'activity_logs'
     id = Column(Integer, primary_key=True)
-    # ### CAMBIO ###: Usar DateTime con zona horaria y server_default
-    timestamp = Column(DateTimeTZ, server_default=func.now(), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     username = Column(String(80), index=True)
     action = Column(String(255))
     details = Column(Text)
@@ -118,14 +107,12 @@ class OutputData(Base):
     pronostico = Column(Integer)
     output = Column(Integer)
     usuario_captura = Column(String(80))
-    # ### CAMBIO ###: Usar DateTime con zona horaria y server_default
-    fecha_captura = Column(DateTimeTZ, server_default=func.now())
+    fecha_captura = Column(DateTime, default=datetime.utcnow)
 
 class SolicitudCorreccion(Base):
     __tablename__ = 'solicitudes_correccion'
     id = Column(Integer, primary_key=True)
-    # ### CAMBIO ###: Usar DateTime con zona horaria y server_default
-    timestamp = Column(DateTimeTZ, server_default=func.now(), index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     usuario_solicitante = Column(String(80), nullable=False)
     fecha_problema = Column(Date, nullable=False)
     grupo = Column(String(10), nullable=False)
@@ -135,21 +122,12 @@ class SolicitudCorreccion(Base):
     descripcion = Column(Text, nullable=False)
     status = Column(String(50), default='Pendiente', index=True)
     admin_username = Column(String(80))
-    # ### CAMBIO ###: Usar DateTime con zona horaria
-    fecha_resolucion = Column(DateTimeTZ)
+    fecha_resolucion = Column(DateTime)
     admin_notas = Column(Text)
-
 
 def init_db():
     print("Verificando y creando tablas si es necesario...")
     try:
-        # En producción con PostgreSQL, establece la zona horaria de la sesión
-        if is_production:
-            with engine.connect() as connection:
-                connection.execute(text("SET TimeZone 'America/Mexico_City'"))
-                connection.commit()
-            print("Zona horaria de la sesión de base de datos establecida en 'America/Mexico_City'.")
-
         Base.metadata.create_all(bind=engine)
         print("Verificación de tablas completada exitosamente.")
         inspector = inspect(engine)
@@ -173,7 +151,6 @@ def init_db():
         print(f"ERROR OPERACIONAL al inicializar la base de datos: {e}", file=sys.stderr)
     except Exception as e:
         print(f"ERROR INESPERADO al inicializar la base de datos: {e}", file=sys.stderr)
-
 
 def create_default_admin():
     print("Verificando la existencia del usuario administrador...")
@@ -204,4 +181,3 @@ if __name__ == '__main__':
     create_default_admin()
     db_session.remove()
     print("\n--- CONFIGURACIÓN MANUAL FINALIZADA ---")
-# No se requieren cambios aquí para la separación de grupos, ya que el modelo ya incluye el campo 'grupo'.
