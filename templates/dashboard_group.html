@@ -41,16 +41,21 @@
             <thead class="text-center thead-light">
                 <tr>
                     <th rowspan="2" class="align-middle">Área</th>
-                    {% for turno_name in turnos %}<th colspan="3">{{ turno_name }}</th>{% endfor %}
+                    {% for turno_name in turnos %}
+                        <th colspan="3">{{ turno_name }}</th>
+                    {% endfor %}
                     <th rowspan="2" class="align-middle">Pron. Total</th>
                     <th rowspan="2" class="align-middle">Prod. Total</th>
                 </tr>
                 <tr>
-                    {% for turno_name in turnos %}<th>Pronóstico</th><th>Producido</th><th>Eficiencia</th>{% endfor %}
+                    {% for turno_name in turnos %}
+                        <th>Pronóstico</th>
+                        <th>Producido</th>
+                        <th>Eficiencia</th>
+                    {% endfor %}
                 </tr>
             </thead>
             <tbody>
-                <!-- ### CAMBIO CLAVE: La iteración ahora coincide con la nueva estructura de datos ### -->
                 {% for area_name in areas %}
                 {% set area_data = production_data.get(area_name, {}) %}
                 <tr>

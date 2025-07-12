@@ -50,7 +50,7 @@
             <p class="text-muted h4">{{ fhp_data.producido }} / {{ fhp_data.pronostico }}</p>
         </div>
     </div>
-</div>
+</div> 
 
 
 <!-- TABLAS CONSOLIDADAS POR GRUPO -->
@@ -64,14 +64,18 @@
             <thead class="text-center thead-light">
                 <tr>
                     <th rowspan="2" class="align-middle">Área</th>
-                    {% for turno_name in nombres_turnos %}<th colspan="{{ horas_turno[turno_name]|length + 3 }}">{{ turno_name }}</th>{% endfor %}
+                    {% for turno_name in nombres_turnos %}
+                        <th colspan="{{ horas_turno[turno_name]|length + 3 }}">{{ turno_name }}</th>
+                    {% endfor %}
                 </tr>
                 <tr>
                     {% for turno_name in nombres_turnos %}
-                    <th>Pron.</th>
-                    {% for hora in horas_turno[turno_name] %}<th>{{ hora }}</th>{% endfor %}
-                    <th>Total Prod.</th>
-                    <th>Eficiencia</th>
+                        <th>Pron.</th>
+                        {% for hora in horas_turno[turno_name] %}
+                            <th>{{ hora }}</th>
+                        {% endfor %}
+                        <th>Total Prod.</th>
+                        <th>Eficiencia</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -83,7 +87,9 @@
                         {% set turno_data = turnos[turno_name] %}
                         {% set eficiencia = turno_data.eficiencia %}
                         <td class="text-center font-weight-bold">{{ turno_data.pronostico }}</td>
-                        {% for hora in horas_turno[turno_name] %}<td class="text-center hourly-data-cell">{{ turno_data.horas.get(hora, '-') }}</td>{% endfor %}
+                        {% for hora in horas_turno[turno_name] %}
+                            <td class="text-center hourly-data-cell">{{ turno_data.horas.get(hora, '-') }}</td>
+                        {% endfor %}
                         <td class="text-center font-weight-bold">{{ turno_data.producido }}</td>
                         <td class="text-center efficiency-cell">
                             <div class="progress" style="height: 22px; font-size: 0.9rem;">
@@ -99,12 +105,10 @@
 
     <!-- VISTA MÓVIL -->
     <div class="mobile-only-view">
-        <!-- NUEVO: Mensaje para girar el dispositivo -->
         <div class="rotate-device-prompt">
             <i class="fas fa-sync-alt"></i>
             <span>Gira tu dispositivo para ver la tabla completa</span>
         </div>
-        
         <div class="accordion mobile-accordion" id="accordion-{{ group }}">
             {% for area, turnos in areas_data.items() %}
             <div class="card">

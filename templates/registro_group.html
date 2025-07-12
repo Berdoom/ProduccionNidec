@@ -65,7 +65,7 @@
                         <td class="text-center">{{ "{:,.0f}".format(pronostico) }}</td>
 
                         {% for hora in horas_turno[turno] %}
-                        {% set valor_hora = detailed_hourly_data.get(area, {}).get(hora, 0) %}
+                        {% set valor_hora = detailed_hourly_data.get(area, {}).get(turno, {}).get(hora, 0) %}
                         <!-- ### CAMBIO ###: Lógica para asignar clase de color -->
                         {% set cell_class = '' %}
                         {% if target_por_hora > 0 and valor_hora > 0 %}
@@ -126,7 +126,6 @@
                                 {% for turno in nombres_turnos %}
                                     {% set turno_data = production_data.get(area, {}).get(turno, {}) %}
                                     {% set pronostico = turno_data.get('pronostico', 0) %}
-                                    <!-- ### CAMBIO ###: Lógica de color también para móvil -->
                                     {% set num_horas = horas_turno[turno]|length %}
                                     {% set target_por_hora = (pronostico / num_horas) if num_horas > 0 and pronostico > 0 else 0 %}
                                     
@@ -134,7 +133,7 @@
                                     <li class="list-group-item d-flex justify-content-between"><span>Pronóstico Turno:</span> <strong>{{ "{:,.0f}".format(pronostico) }}</strong></li>
                                     
                                     {% for hora in horas_turno[turno] %}
-                                        {% set valor_hora = detailed_hourly_data.get(area, {}).get(hora, 0) %}
+                                        {% set valor_hora = detailed_hourly_data.get(area, {}).get(turno, {}).get(hora, 0) %}
                                         {% set cell_class = '' %}
                                         {% if target_por_hora > 0 and valor_hora > 0 %}
                                             {% if valor_hora >= target_por_hora %}
