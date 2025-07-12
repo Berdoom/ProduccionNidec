@@ -465,21 +465,18 @@ def registro(group):
     selected_date_str = request.args.get('fecha', datetime.now(mexico_tz).strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     
-    # Solo obtener datos del grupo correspondiente
+    # Usar la función de datos unificada
     all_data = get_detailed_performance_data(selected_date)
     production_data = all_data.get(group_upper, {})
     
-    # detailed_hourly_data solo para el grupo correspondiente
+    # Construir el diccionario 'detailed_hourly_data' para mantener la compatibilidad con la plantilla existente
     detailed_hourly_data = {}
     for area, turnos in production_data.items():
         detailed_hourly_data[area] = {}
         for turno, data in turnos.items():
-            if turno not in detailed_hourly_data[area]:
-                detailed_hourly_data[area][turno] = {}
             for hora, valor in data['horas'].items():
-                detailed_hourly_data[area][turno][hora] = valor
-
-    # Solo las áreas del grupo correspondiente
+                detailed_hourly_data[area][hora] = valor
+    
     areas_list = [a for a in (AREAS_IHP if group_upper == 'IHP' else AREAS_FHP)]
     output_data = get_output_data(group_upper, selected_date_str)
 
@@ -499,7 +496,7 @@ def registro(group):
 
     return render_template('registro_group.html', 
                            selected_date=selected_date_str, production_data=production_data, 
-                           detailed_hourly_data=detailed_hourly_data,
+                           detailed_hourly_data=detailed_hourly_data, # Pasar para compatibilidad
                            areas=areas_list, nombres_turnos=NOMBRES_TURNOS, 
                            output_data=output_data, group_name=group_upper, 
                            totals=totals, meta=meta_produccion, horas_turno=HORAS_TURNO)
