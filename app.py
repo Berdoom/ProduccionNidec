@@ -1,6 +1,6 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, abort
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 import secrets
 import pandas as pd
@@ -10,6 +10,11 @@ import locale
 from collections import Counter
 import calendar
 from flask_apscheduler import APScheduler
+# --- NUEVO: Importar zoneinfo para zona horaria de México ---
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from pytz import timezone as ZoneInfo  # fallback para Python <3.9
 
 # --- Importaciones de la Base de Datos y Correo ---
 from sqlalchemy import func, exc, extract
@@ -33,11 +38,20 @@ app.secret_key = os.getenv("SECRET_KEY", "n1D3c$#pro")
 # ======================================================================
 scheduler = APScheduler()
 
+# --- NUEVA FUNCIÓN: Fecha y hora de México ---
+def now_mexico():
+    try:
+        return datetime.now(ZoneInfo("America/Mexico_City"))
+    except Exception:
+        # fallback si zoneinfo falla
+        import pytz
+        return datetime.now(pytz.timezone("America/Mexico_City"))
+
 def check_and_send_notifications():
     with app.app_context():
-        print(f"[{datetime.utcnow()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
-        today = datetime.utcnow().date()
-        now = datetime.utcnow()
+        print(f"[{now_mexico()}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
+        today = now_mexico().date()
+        now = now_mexico()
         missing_entries = []
         all_areas = list(set([a for a in AREAS_IHP if a != 'Output'] + [a for a in AREAS_FHP if a != 'Output']))
         for turno, horas in HORAS_TURNO.items():
@@ -357,11 +371,11 @@ def get_detailed_performance_data(selected_date):
 @login_required
 @role_required(['ADMIN'])
 def dashboard_admin():
-    selected_date_str = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except ValueError:
-        selected_date = datetime.utcnow().date()
+        selected_date = now_mexico().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
         flash("Formato de fecha inválido. Mostrando datos de hoy.", "warning")
     
@@ -377,7 +391,7 @@ def dashboard_admin():
     # --- CAMBIO: Usar la nueva función para obtener todos los datos ---
     detailed_data = get_detailed_performance_data(selected_date)
     
-    today = datetime.utcnow().date()
+    today = now_mexico().date()
     
     if selected_date == today:
         period_label = f"Hoy ({selected_date_str})"
@@ -410,8 +424,8 @@ def dashboard_group(group):
         flash('No tienes permiso para ver este dashboard.', 'danger')
         return redirect(url_for('dashboard'))
     
-    today_str = datetime.utcnow().strftime('%Y-%m-%d')
-    yesterday_str = (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = now_mexico().strftime('%Y-%m-%d')
+    yesterday_str = (now_mexico() - timedelta(days=1)).strftime('%Y-%m-%d')
     
     summary_today = get_group_performance(group_upper, today_str)
     summary_yesterday = get_group_performance(group_upper, yesterday_str)
@@ -459,7 +473,7 @@ def registro(group):
         flash('No tienes permiso para ver este registro.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date_str = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
     
@@ -528,7 +542,7 @@ def reportes():
     default_group = user_role if user_role in ['IHP', 'FHP'] else 'IHP'
     group = request.args.get('group', default_group)
     if not is_admin: group = user_role
-    today = datetime.utcnow()
+    today = now_mexico()
     year = request.args.get('year', today.year, type=int)
     month = request.args.get('month', today.month, type=int)
     efficiency_data = {'labels': [], 'data': []}
@@ -585,14 +599,14 @@ def captura(group):
     if request.method == 'POST':
         selected_date_str = request.form.get('fecha')
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
-        capture_date = datetime.utcnow().date()
+        capture_date = now_mexico().date()
         
         # CAMBIO: Se genera una nota de auditoría si las fechas no coinciden
         audit_note = ""
         if selected_date != capture_date:
             audit_note = f" (Capturado el {capture_date.strftime('%Y-%m-%d')} para la fecha {selected_date_str})."
 
-        now_dt = datetime.utcnow()
+        now_dt = now_mexico()
         changes_detected = False
         try:
             all_pronosticos = db_session.query(Pronostico).filter_by(fecha=selected_date, grupo=group_upper).all()
@@ -681,7 +695,7 @@ def captura(group):
             flash(f"Error al guardar en la base de datos: {e}", 'danger')
         return redirect(url_for('captura', group=group, fecha=selected_date_str))
         
-    selected_date_str = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
+    selected_date_str = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     data_for_template = get_structured_capture_data(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date_str)
@@ -725,7 +739,7 @@ def export_excel(group):
         flash('No tienes permiso para exportar estos datos.', 'danger')
         return redirect(url_for('dashboard'))
     
-    selected_date = request.args.get('fecha', datetime.utcnow().strftime('%Y-%m-%d'))
+    selected_date = request.args.get('fecha', now_mexico().strftime('%Y-%m-%d'))
     production_data = get_performance_data_from_db(group_upper, selected_date)
     output_data = get_output_data(group_upper, selected_date)
     
