@@ -86,6 +86,7 @@ body {
 /* --- Insignias de Rol --- */
 .badge-role-admin { background-color: var(--nidec-green-dark); color: white; }
 .badge-role-ihp, .badge-role-fhp { background-color: var(--nidec-green); color: white; }
+.badge-nidec { background-color: var(--nidec-green); color: var(--white); }
 
 /* --- Estilos de Tabla de Captura --- */
 .production-table input[type="number"]:focus { border-color: var(--nidec-green); box-shadow: 0 0 0 3px rgba(36, 184, 23, 0.25); }
@@ -94,227 +95,106 @@ body {
 .shortfall-cell { background-color: #ffeeba !important; color: #856404 !important; font-weight: bold; }
 .badge-success-reason { background-color: var(--nidec-green); color: white; padding: .3em .5em; border-radius: 6px; font-size: 0.75rem; }
 
-/* --- Estilos para el Ícono de Razón --- */
-.reason-icon-container {
-    display: inline-block;
-    margin-left: 8px;
-    font-size: 1.1rem;
-    vertical-align: middle;
+/* === ESTILOS PARA EL TAMAÑO DE INPUTS Y FUENTES EN CAPTURA === */
+.desktop-only .table-sm input.adaptive-font {
+    width: 70px;
+    max-width: 70px;
+    padding: .25rem .1rem;
+    font-size: 0.9em;
+    box-sizing: border-box;
 }
+.input-font-sm { font-size: 0.8em !important; }
+.input-font-xs { font-size: 0.7em !important; }
 
-.reason-icon-active {
-    cursor: pointer;
-}
 
 /* --- Estilos para la Fila de Razón en Bandeja --- */
-tr.status-en-revisión {
-    background-color: #fff3cd !important;
-}
-tr.status-resuelto {
-    background-color: #d4edda !important;
-}
-tr.status-resuelto td {
-    color: #6c757d;
-    text-decoration: line-through;
-}
-tr.status-resuelto .badge,
-tr.status-resuelto .custom-select {
-    opacity: 0.65;
-}
+tr.status-en-revisión { background-color: #fff3cd !important; }
+tr.status-resuelto { background-color: #d4edda !important; }
+tr.status-resuelto td { color: #6c757d; text-decoration: line-through; }
+tr.status-resuelto .badge, tr.status-resuelto .custom-select { opacity: 0.65; }
 
 /* --- Estilos para Notificaciones (Toasts) --- */
-.toast-container {
-    position: fixed;
-    top: 90px;
-    right: 20px;
-    z-index: 1055;
-}
+.toast-container { position: fixed; top: 90px; right: 20px; z-index: 1055; }
+.save-button-container { text-align: center; margin-top: 2rem; }
 
-/* --- CAMBIO: Contenedor del botón de guardado --- */
-.save-button-container {
-    text-align: center;
-    margin-top: 2rem;
+/* =================================================================
+   ESTILOS PARA ACORDEÓN RESPONSIVE (PÁGINAS GENERALES) 
+================================================================= */
+@media (max-width: 768px) {
+    .table-responsive.desktop-only, .dashboard-table { display: none; }
+    .accordion-responsive { display: block; }
+    .accordion-responsive .card, #registroAccordion .card { margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; }
+    .accordion-responsive .card-header, #registroAccordion .card-header { background-color: var(--nidec-green-light); padding: 0; border-bottom: 1px solid var(--border-color); }
+    .accordion-responsive .card-header button, #registroAccordion .card-header button { color: var(--nidec-green-dark); font-weight: 600; font-size: 1.1rem; width: 100%; text-align: left; padding: 1rem; text-decoration: none; border: none; background: transparent; position: relative; }
+    .accordion-responsive .card-header button:after, #registroAccordion .card-header button:after { content: '\f078'; font-family: 'Font Awesome 5 Free'; font-weight: 900; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); transition: transform 0.2s ease-in-out; }
+    .accordion-responsive .card-header button.collapsed:after, #registroAccordion .card-header button.collapsed:after { transform: translateY(-50%) rotate(-90deg); }
+    .accordion-responsive .card-body, #registroAccordion .card-body { padding: 0; }
+    .accordion-responsive .list-group-item, #registroAccordion .list-group-item { display: flex; justify-content: space-between; align-items: center; padding: 0.8rem 1rem; }
+    .accordion-responsive .list-group-item strong { color: var(--text-dark); }
+    .accordion-responsive .list-group-item span, .accordion-responsive .list-group-item input { text-align: right; }
+    .accordion-responsive .list-group-item input[type="number"] { width: 100px; flex-shrink: 0; padding: 6px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; }
+    .list-group-item.turno-header { background-color: #f1f3f5; font-weight: bold; color: var(--text-dark); justify-content: center; }
+    
+    .save-button-container { position: fixed; bottom: 0; left: 0; right: 0; background-color: rgba(255, 255, 255, 0.98); padding: 1rem; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 0; border-top: 1px solid var(--border-color); }
+    .save-button-container .btn { width: 100%; }
+    main.container-fluid { padding-bottom: 100px; }
 }
 
 /* =================================================================
-   ESTILOS PARA ACORDEÓN RESPONSIVE (CELULAR) 
+   ESTILOS PARA EL DASHBOARD DE ADMINISTRADOR (VERSIÓN FINAL)
 ================================================================= */
-.accordion-responsive {
-    display: none;
+
+/* --- Estilos para las Ruedas de Progreso de KPIs --- */
+.kpi-wheel-card { padding: 1.5rem; background: var(--white); border-radius: 1rem; box-shadow: 0 5px 20px rgba(0,0,0,0.07); transition: transform 0.2s ease; }
+.kpi-wheel-card:hover { transform: translateY(-5px); }
+.circular-progress-kpi { position: relative; height: 160px; width: 160px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: conic-gradient(var(--gradient-color) calc(var(--value) * 1%), #ededed 0); }
+.circular-progress-kpi::before { content: ""; position: absolute; height: 88%; width: 88%; background-color: var(--white); border-radius: 50%; }
+.circular-progress-kpi .progress-value { position: relative; font-size: 2.5rem; font-weight: 700; color: #333; }
+
+/* --- Estilos para las Tablas Consolidadas de Admin --- */
+.group-performance-table { border-collapse: separate; border-spacing: 0; }
+.group-performance-table thead th { font-weight: 600; vertical-align: middle; white-space: nowrap; }
+.group-performance-table .area-name-cell { font-weight: 700; background-color: #f8f9fa; width: 12%; vertical-align: middle; position: sticky; left: 0; z-index: 2; }
+.table-responsive .group-performance-table thead th:first-child { position: sticky; left: 0; z-index: 3; }
+.group-performance-table td { vertical-align: middle; }
+.group-performance-table .hourly-data-cell { background-color: #fdfdfd; color: var(--text-muted); font-size: 0.9em; }
+.group-performance-table .efficiency-cell { min-width: 120px; }
+.group-performance-table .progress-bar { color: #212529; text-shadow: 0 0 3px rgba(255,255,255,0.7); }
+
+/* --- Colores para Dashboard Admin --- */
+.heatmap-zero { --gradient-color: #e0e0e0; }
+.heatmap-danger { --gradient-color: #dc3545; }
+.heatmap-warning { --gradient-color: #ffc107; }
+.heatmap-success { --gradient-color: #28a745; }
+.heatmap-excellent { --gradient-color: var(--nidec-green); }
+.progress-bar.heatmap-danger { background-color: #f8d7da !important; }
+.progress-bar.heatmap-warning { background-color: #fff3cd !important; }
+.progress-bar.heatmap-success { background-color: #d4edda !important; }
+.progress-bar.heatmap-excellent { background-color: #a3e9b3 !important; }
+.progress-bar.heatmap-zero { background-color: #f8f9fa !important; color: #6c757d !important; }
+
+/* --- Lógica de Visibilidad para Dashboard Admin --- */
+.desktop-only-table { display: block; }
+.mobile-only-view { display: none; }
+.rotate-device-prompt { display: none; }
+
+@media (max-width: 991.98px) and (orientation: landscape) {
+    .desktop-only-table { display: block; }
+    .mobile-only-view { display: none; }
 }
 
-@media (max-width: 768px) {
-    .table-responsive.desktop-only, .dashboard-table {
-        display: none;
-    }
-    .accordion-responsive {
-        display: block;
-    }
-    .accordion-responsive .card,
-    #registroAccordion .card {
-        margin-bottom: 10px;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-    }
-    .accordion-responsive .card-header,
-    #registroAccordion .card-header {
-        background-color: var(--nidec-green-light);
-        padding: 0;
-        border-bottom: 1px solid var(--border-color);
-    }
-    .accordion-responsive .card-header button,
-    #registroAccordion .card-header button {
-        color: var(--nidec-green-dark);
-        font-weight: 600;
-        font-size: 1.1rem;
-        width: 100%;
-        text-align: left;
-        padding: 1rem;
-        text-decoration: none;
-        border: none;
-        background: transparent;
-        position: relative;
-    }
-    .accordion-responsive .card-header button:after,
-    #registroAccordion .card-header button:after {
-        content: '\f078'; /* FontAwesome down arrow */
-        font-family: 'Font Awesome 5 Free';
-        font-weight: 900;
-        position: absolute;
-        right: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        transition: transform 0.2s ease-in-out;
-    }
-    .accordion-responsive .card-header button.collapsed:after,
-    #registroAccordion .card-header button.collapsed:after {
-        transform: translateY(-50%) rotate(-90deg);
-    }
-    .accordion-responsive .card-body,
-    #registroAccordion .card-body {
-        padding: 0;
-    }
-    .accordion-responsive .list-group-item,
-    #registroAccordion .list-group-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.8rem 1rem;
-    }
-    .accordion-responsive .list-group-item strong {
-        color: var(--text-dark);
-    }
-    .accordion-responsive .list-group-item span,
-    .accordion-responsive .list-group-item input {
-        text-align: right;
-    }
-    .accordion-responsive .list-group-item input[type="number"] {
-        width: 100px;
-        flex-shrink: 0;
-        padding: 6px;
-        text-align: center;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-    }
-    .list-group-item.turno-header {
-        background-color: #f1f3f5;
-        font-weight: bold;
-        color: var(--text-dark);
-        justify-content: center;
-    }
-
-    /* --- CAMBIO: Estilos para el botón de guardado fijo en móvil --- */
-    .save-button-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: rgba(255, 255, 255, 0.98);
-        padding: 1rem;
-        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-        z-index: 1000;
-        margin-top: 0;
-        border-top: 1px solid var(--border-color);
-    }
-
-    .save-button-container .btn {
-        width: 100%;
-    }
-
-    /* Añade espacio en la parte inferior para que el contenido no quede oculto */
-    main.container-fluid {
-        padding-bottom: 100px;
-    }
+@media (max-width: 991.98px) and (orientation: portrait) {
+    .desktop-only-table { display: none; }
+    .mobile-only-view { display: block; }
+    .rotate-device-prompt { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 1rem; background-color: var(--nidec-green-light); border: 1px dashed var(--nidec-green); border-radius: .5rem; color: var(--nidec-green-dark); font-weight: 500; margin-bottom: 1.5rem; text-align: center; }
+    .rotate-device-prompt .fa-sync-alt { animation: fa-spin 2s linear infinite; }
 }
 
-/* --- Estilos para Heatmap del Dashboard Admin --- */
-.heatmap-table td {
-    font-weight: bold;
-    color: var(--text-dark);
-    transition: background-color 0.3s ease;
-}
-
-.heatmap-table .group-header td {
-    background-color: #e9ecef;
-    font-weight: 700;
-    color: #495057;
-}
-
-.heatmap-zero { background-color: #f8f9fa; color: #6c757d !important; }
-.heatmap-danger { background-color: #f8d7da; }
-.heatmap-warning { background-color: #fff3cd; }
-.heatmap-success { background-color: #d4edda; }
-.heatmap-excellent { background-color: #a3e9b3; }
-
-/* --- Estilos para la tabla del Dashboard de Grupo --- */
-.dashboard-table {
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    border-collapse: separate;
-    border-spacing: 0;
-    width: 100%;
-    overflow: hidden;
-}
-
-.dashboard-table thead th {
-    background-color: #f8f9fa;
-    color: #343a40;
-    font-weight: 600;
-    border-bottom: 2px solid var(--border-color);
-    text-align: center;
-    vertical-align: middle;
-    padding: 0.75rem;
-}
-
-.dashboard-table thead th:first-child {
-    text-align: left;
-}
-
-.dashboard-table tbody td {
-    border-top: 1px solid var(--border-color);
-    padding: 0.75rem;
-    vertical-align: middle;
-}
-
-.dashboard-table tbody tr:first-child td {
-    border-top: none;
-}
-
-.dashboard-table .area-header {
-    text-align: left;
-    font-weight: 600;
-    color: var(--text-dark);
-}
-
-.dashboard-table .output-row {
-    background-color: var(--nidec-green-light);
-    font-weight: 600;
-}
-
-.dashboard-table .output-row td {
-    color: var(--nidec-green-dark);
-}
-
-.dashboard-table .font-weight-bold {
-    font-weight: 600 !important;
-}
+/* --- Estilos para Acordeón Móvil de Dashboard Admin --- */
+.mobile-accordion .card { border: 1px solid var(--border-color); margin-bottom: .5rem; }
+.mobile-accordion .card-header { background-color: var(--nidec-green-light); padding: 0; }
+.mobile-accordion .card-header button { font-weight: 600; color: var(--nidec-green-dark); text-decoration: none; padding: .75rem 1.25rem; }
+.mobile-accordion .shift-card { border-left: none; border-right: none; margin-bottom: 0; border-radius: 0; }
+.mobile-accordion .shift-header { background-color: #fff; font-weight: 500; }
+.mobile-accordion .shift-header button { color: var(--text-dark); }
+.mobile-accordion .badge { font-size: 100%; vertical-align: middle; }
