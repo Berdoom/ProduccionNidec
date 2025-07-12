@@ -204,3 +204,4 @@ if __name__ == '__main__':
     create_default_admin()
     db_session.remove()
     print("\n--- CONFIGURACIÓN MANUAL FINALIZADA ---")
+# No se requieren cambios aquí para la separación de grupos, ya que el modelo ya incluye el campo 'grupo'.
