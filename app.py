@@ -25,9 +25,6 @@ except locale.Error:
         locale.setlocale(locale.LC_TIME, 'Spanish_Spain')
     except locale.Error:
         print("Locale 'es_ES' no encontrado, usando el default.")
-        
-# Definir la zona horaria de México
-mexico_tz = pytz.timezone('America/Mexico_City')
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "n1D3c$#pro")
@@ -39,40 +36,40 @@ scheduler = APScheduler()
 
 def check_and_send_notifications():
     with app.app_context():
-        now_mexico = datetime.now(mexico_tz)
-        print(f"[{now_mexico.strftime('%Y-%m-%d %H:%M:%S %Z')}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
-        today = now_mexico.date()
+        print(f"[{datetime.now(mexico_tz)}] TAREA PROGRAMADA: Verificando datos de producción faltantes...")
+        today = datetime.now(mexico_tz).date()
+        now = datetime.now(mexico_tz)
         missing_entries = []
         all_areas = list(set([a for a in AREAS_IHP if a != 'Output'] + [a for a in AREAS_FHP if a != 'Output']))
-        
         for turno, horas in HORAS_TURNO.items():
             for hora_str in horas:
                 try:
                     hora_obj = datetime.strptime(hora_str, '%I%p').time()
-                    target_datetime = mexico_tz.localize(datetime.combine(today, hora_obj))
-                except ValueError: 
-                    continue
-                
-                if (target_datetime + timedelta(hours=1)) < now_mexico < (target_datetime + timedelta(hours=3)):
+                    target_datetime = datetime.combine(today, hora_obj)
+                except ValueError: continue
+                if (target_datetime + timedelta(hours=1)) < now < (target_datetime + timedelta(hours=3)):
                     for area in all_areas:
-                        grupo = 'IHP' if area in AREAS_IHP else 'FHP'
-                        entry_exists = db_session.query(ProduccionCaptura).filter(ProduccionCaptura.fecha == today, ProduccionCaptura.grupo == grupo, ProduccionCaptura.area == area, ProduccionCaptura.hora == hora_str).first()
+                        grupo_esperado = 'IHP' if area in AREAS_IHP else 'FHP'
+                        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas
+                        entry_exists = db_session.query(ProduccionCaptura).filter(
+                            ProduccionCaptura.fecha == today,
+                            func.upper(ProduccionCaptura.grupo) == grupo_esperado.upper(),
+                            ProduccionCaptura.area == area,
+                            ProduccionCaptura.hora == hora_str
+                        ).first()
                         if not entry_exists:
-                            missing_info = f"- Grupo {grupo}, Área: {area}, Hora: {hora_str}"
+                            missing_info = f"- Grupo {grupo_esperado}, Área: {area}, Hora: {hora_str}"
                             missing_entries.append(missing_info)
-                            
         if missing_entries:
             print(f"¡Se encontraron {len(missing_entries)} registros faltantes! Preparando para enviar correo.")
             recipient = os.getenv('MAIL_RECIPIENT')
-            subject = f"Alerta: Faltan Registros de Producción ({now_mexico.strftime('%Y-%m-%d %H:%M')})"
+            subject = f"Alerta: Faltan Registros de Producción ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC)"
             body_html = "<p>Se ha detectado que los siguientes registros de producción no han sido capturados a tiempo:</p><ul>"
-            for item in missing_entries: 
-                body_html += f"<li>{item}</li>"
+            for item in missing_entries: body_html += f"<li>{item}</li>"
             body_html += "</ul><p>Por favor, acceda al sistema para completar la información.</p>"
             send_email(recipient, subject, body_html)
         else:
-            print(f"[{now_mexico.strftime('%Y-%m-%d %H:%M:%S %Z')}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
-
+            print(f"[{datetime.utcnow()}] TAREA PROGRAMADA: No se encontraron registros faltantes.")
 
 # --- INICIALIZACIÓN DE LA BASE DE DATOS Y DEL PROGRAMADOR ---
 print("INICIANDO APLICACIÓN FLASK...")
@@ -83,9 +80,9 @@ with app.app_context():
     print("Inicialización de la base de datos completada.")
     if not scheduler.running:
         scheduler.init_app(app)
-        scheduler.add_job(id='check_production_job', func=check_and_send_notifications, trigger='interval', minutes=5, timezone=mexico_tz)
+        scheduler.add_job(id='check_production_job', func=check_and_send_notifications, trigger='interval', minutes=5)
         scheduler.start()
-        print(f"Sistema de notificaciones programadas iniciado en zona horaria: {mexico_tz.zone}.")
+        print("Sistema de notificaciones programadas iniciado.")
 
 app.permanent_session_lifetime = timedelta(minutes=30)
 
@@ -117,7 +114,7 @@ app.jinja_env.filters['month_name'] = get_month_name
 def log_activity(action, details="", area_grupo=None, category="General", severity="Info"):
     try:
         log_entry = ActivityLog(
-            timestamp=datetime.now(mexico_tz),
+            timestamp=datetime.utcnow(),
             username=session.get('username', 'Sistema'),
             action=action,
             details=details,
@@ -127,7 +124,7 @@ def log_activity(action, details="", area_grupo=None, category="General", severi
             severity=severity
         )
         db_session.add(log_entry)
-        db_session.commit()
+        db_session.commit() # Commit a nivel de log para asegurar registro
     except exc.SQLAlchemyError as e:
         db_session.rollback()
         print(f"Error al registrar actividad: {e}")
@@ -208,20 +205,44 @@ def dashboard():
     return redirect(url_for('login'))
 
 # --- Funciones de Lógica de Negocio ---
+def get_performance_data_from_db(group, date_str):
+    selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    areas = [area for area in (AREAS_IHP if group.upper() == 'IHP' else AREAS_FHP) if area != 'Output']
+    performance_data = {area: {turno: {'pronostico': 0, 'producido': 0} for turno in NOMBRES_TURNOS} for area in areas}
+    try:
+        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas
+        pronosticos = db_session.query(Pronostico.area, Pronostico.turno, Pronostico.valor_pronostico).filter(Pronostico.fecha == selected_date, func.upper(Pronostico.grupo) == group.upper()).all()
+        for area, turno, valor in pronosticos:
+            if area in performance_data and turno in performance_data[area]:
+                performance_data[area][turno]['pronostico'] = valor or 0
+        
+        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas
+        produccion_rows = db_session.query(ProduccionCaptura.area, ProduccionCaptura.hora, ProduccionCaptura.valor_producido).filter(ProduccionCaptura.fecha == selected_date, func.upper(ProduccionCaptura.grupo) == group.upper()).all()
+        for area, hora, valor in produccion_rows:
+            for turno, horas in HORAS_TURNO.items():
+                if hora in horas:
+                    if area in performance_data and turno in performance_data[area]:
+                        performance_data[area][turno]['producido'] += valor or 0
+                    break
+    except exc.SQLAlchemyError as e:
+        flash(f"Error al consultar datos de rendimiento: {e}", "danger")
+    return performance_data
+
 def get_group_performance(group_name, start_date_str, end_date_str=None):
     start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
     end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
     try:
-        query_pronostico_areas = db_session.query(func.sum(Pronostico.valor_pronostico)).filter(Pronostico.grupo == group_name, Pronostico.fecha.between(start_date, end_date))
+        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas en todas las consultas
+        query_pronostico_areas = db_session.query(func.sum(Pronostico.valor_pronostico)).filter(func.upper(Pronostico.grupo) == group_name.upper(), Pronostico.fecha.between(start_date, end_date))
         total_pronostico_areas = query_pronostico_areas.scalar() or 0
         
-        query_pronostico_output = db_session.query(func.sum(OutputData.pronostico)).filter(OutputData.grupo == group_name, OutputData.fecha.between(start_date, end_date))
+        query_pronostico_output = db_session.query(func.sum(OutputData.pronostico)).filter(func.upper(OutputData.grupo) == group_name.upper(), OutputData.fecha.between(start_date, end_date))
         total_pronostico_output = query_pronostico_output.scalar() or 0
 
-        query_producido_areas = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(ProduccionCaptura.grupo == group_name, ProduccionCaptura.fecha.between(start_date, end_date))
+        query_producido_areas = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(func.upper(ProduccionCaptura.grupo) == group_name.upper(), ProduccionCaptura.fecha.between(start_date, end_date))
         total_producido_areas = query_producido_areas.scalar() or 0
         
-        query_producido_output = db_session.query(func.sum(OutputData.output)).filter(OutputData.grupo == group_name, OutputData.fecha.between(start_date, end_date))
+        query_producido_output = db_session.query(func.sum(OutputData.output)).filter(func.upper(OutputData.grupo) == group_name.upper(), OutputData.fecha.between(start_date, end_date))
         total_producido_output = query_producido_output.scalar() or 0
 
         total_pronostico = total_pronostico_areas + total_pronostico_output
@@ -236,7 +257,7 @@ def get_group_performance(group_name, start_date_str, end_date_str=None):
 def get_structured_capture_data(group_name, selected_date):
     data_to_render = {}
     try:
-        areas_list = AREAS_IHP if group_name == 'IHP' else AREAS_FHP
+        areas_list = AREAS_IHP if group_name.upper() == 'IHP' else AREAS_FHP
         for area in areas_list:
             if area == 'Output': continue
             data_to_render[area] = {}
@@ -244,8 +265,11 @@ def get_structured_capture_data(group_name, selected_date):
                 data_to_render[area][turno] = { 'pronostico': '', 'razon_desviacion': None }
                 for hora in HORAS_TURNO[turno]:
                     data_to_render[area][turno][hora] = ''
-        all_pronosticos = db_session.query(Pronostico).filter_by(fecha=selected_date, grupo=group_name).all()
-        all_produccion = db_session.query(ProduccionCaptura).filter_by(fecha=selected_date, grupo=group_name).all()
+        
+        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas
+        all_pronosticos = db_session.query(Pronostico).filter_by(fecha=selected_date).filter(func.upper(Pronostico.grupo) == group_name.upper()).all()
+        all_produccion = db_session.query(ProduccionCaptura).filter_by(fecha=selected_date).filter(func.upper(ProduccionCaptura.grupo) == group_name.upper()).all()
+        
         for p in all_pronosticos:
             if p.area in data_to_render and p.turno in data_to_render[p.area]:
                 data_to_render[p.area][p.turno]['pronostico'] = p.valor_pronostico
@@ -263,14 +287,14 @@ def get_structured_capture_data(group_name, selected_date):
 def get_output_data(group, date_str):
     selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     try:
-        output_row = db_session.query(OutputData).filter_by(fecha=selected_date, grupo=group).first()
+        # CORRECCIÓN: Búsqueda insensible a mayúsculas/minúsculas
+        output_row = db_session.query(OutputData).filter_by(fecha=selected_date).filter(func.upper(OutputData.grupo) == group.upper()).first()
         if output_row: return {'pronostico': output_row.pronostico or 0, 'output': output_row.output or 0}
     except exc.SQLAlchemyError as e:
         flash(f"Error al obtener datos de Output: {e}", "danger")
     return {'pronostico': 0, 'output': 0}
 
 def get_heatmap_color_class(eficiencia):
-    if eficiencia is None: eficiencia = 0
     if eficiencia == 0: return 'heatmap-zero'
     if eficiencia < 80: return 'heatmap-danger'
     if eficiencia < 95: return 'heatmap-warning'
@@ -280,7 +304,6 @@ def get_heatmap_color_class(eficiencia):
 app.jinja_env.filters['heatmap_color'] = get_heatmap_color_class
 
 def get_heatmap_badge_class(eficiencia):
-    if eficiencia is None: eficiencia = 0
     if eficiencia == 0: return 'badge-secondary'
     if eficiencia < 80: return 'badge-danger'
     if eficiencia < 95: return 'badge-warning'
@@ -292,45 +315,35 @@ app.jinja_env.filters['heatmap_color_badge'] = get_heatmap_badge_class
 def get_detailed_performance_data(selected_date):
     performance_data = {'IHP': {}, 'FHP': {}}
     all_areas = {'IHP': AREAS_IHP, 'FHP': AREAS_FHP}
-
     try:
+        pronosticos = db_session.query(Pronostico).filter(Pronostico.fecha == selected_date).all()
+        produccion_horas = db_session.query(ProduccionCaptura).filter(ProduccionCaptura.fecha == selected_date).all()
         for group, areas in all_areas.items():
             for area in [a for a in areas if a != 'Output']:
                 performance_data[group][area] = {}
                 for turno in NOMBRES_TURNOS:
-                    performance_data[group][area][turno] = {
-                        'pronostico': 0, 'producido': 0, 'eficiencia': 0,
-                        'horas': {hora: 0 for hora in HORAS_TURNO[turno]}
-                    }
-        
-        pronosticos = db_session.query(Pronostico).filter(Pronostico.fecha == selected_date).all()
+                    performance_data[group][area][turno] = { 'pronostico': 0, 'producido': 0, 'eficiencia': 0, 'horas': {hora: 0 for hora in HORAS_TURNO[turno]} }
         for p in pronosticos:
             group_key = p.grupo.upper()
-            if group_key in performance_data and p.area in performance_data[group_key] and p.turno in performance_data[group_key][p.area]:
+            if group_key in performance_data and p.area in performance_data[group_key]:
                 performance_data[group_key][p.area][p.turno]['pronostico'] = p.valor_pronostico or 0
-        
-        produccion_horas = db_session.query(ProduccionCaptura).filter(ProduccionCaptura.fecha == selected_date).all()
         for prod in produccion_horas:
             group_key = prod.grupo.upper()
             for turno, horas_del_turno in HORAS_TURNO.items():
                 if prod.hora in horas_del_turno:
-                    if group_key in performance_data and prod.area in performance_data[group_key] and turno in performance_data[group_key][prod.area]:
+                    if group_key in performance_data and prod.area in performance_data[group_key]:
                         performance_data[group_key][prod.area][turno]['horas'][prod.hora] = prod.valor_producido or 0
                         performance_data[group_key][prod.area][turno]['producido'] += prod.valor_producido or 0
                     break
-        
         for group in performance_data:
             for area in performance_data[group]:
                 for turno in performance_data[group][area]:
                     turno_data = performance_data[group][area][turno]
                     if turno_data['pronostico'] > 0:
                         turno_data['eficiencia'] = round((turno_data['producido'] / turno_data['pronostico']) * 100, 1)
-
     except exc.SQLAlchemyError as e:
         flash(f"Error al generar datos detallados del dashboard: {e}", "danger")
-
     return performance_data
-
 
 # --- Rutas de Dashboards y Registros ---
 @app.route('/dashboard/admin')
@@ -353,22 +366,26 @@ def dashboard_admin():
     total_eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
     
     global_kpis = {'pronostico': f"{total_pronostico:,.0f}",'producido': f"{total_producido:,.0f}",'eficiencia': round(total_eficiencia, 2)}
-    
     detailed_data = get_detailed_performance_data(selected_date)
     
     today = datetime.now(mexico_tz).date()
-    
     period_label = f"Hoy ({selected_date_str})" if selected_date == today else f"Día: {selected_date_str}"
-        
+    
     output_data_ihp = get_output_data('IHP', selected_date_str)
     output_data_fhp = get_output_data('FHP', selected_date_str)
         
     return render_template(
         'dashboard_admin.html', 
-        period_label=period_label, selected_date=selected_date_str, global_kpis=global_kpis,
-        ihp_data=ihp_data, fhp_data=fhp_data, performance_data=detailed_data,
-        nombres_turnos=NOMBRES_TURNOS, horas_turno=HORAS_TURNO,
-        output_data_ihp=output_data_ihp, output_data_fhp=output_data_fhp
+        period_label=period_label, 
+        selected_date=selected_date_str, 
+        global_kpis=global_kpis,
+        ihp_data=ihp_data, 
+        fhp_data=fhp_data, 
+        performance_data=detailed_data,
+        nombres_turnos=NOMBRES_TURNOS,
+        horas_turno=HORAS_TURNO,
+        output_data_ihp=output_data_ihp,
+        output_data_fhp=output_data_fhp
     )
 
 @app.route('/dashboard/<group>')
@@ -380,32 +397,60 @@ def dashboard_group(group):
         flash('No tienes permiso para ver este dashboard.', 'danger')
         return redirect(url_for('dashboard'))
     
-    now_mexico = datetime.now(mexico_tz)
-    today_str = now_mexico.strftime('%Y-%m-%d')
-    today_date = now_mexico.date()
-    yesterday_str = (now_mexico - timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = datetime.now(mexico_tz).strftime('%Y-%m-%d')
+    today_date = datetime.now(mexico_tz).date()
+    yesterday_str = (today_date - timedelta(days=1)).strftime('%Y-%m-%d')
     
     summary_today = get_group_performance(group_upper, today_str)
     summary_yesterday = get_group_performance(group_upper, yesterday_str)
     
     prod_today_num = int(summary_today['producido'].replace(',', ''))
     prod_yesterday_num = int(summary_yesterday['producido'].replace(',', ''))
+    
     if prod_today_num > prod_yesterday_num: summary_today['trend'] = 'up'
     elif prod_today_num < prod_yesterday_num: summary_today['trend'] = 'down'
     else: summary_today['trend'] = 'stable'
     
-    all_performance_data = get_detailed_performance_data(today_date)
-    group_performance_data = all_performance_data.get(group_upper, {})
-    
+    performance_data = get_performance_data_from_db(group_upper, today_str)
     areas_list = [a for a in (AREAS_IHP if group_upper == 'IHP' else AREAS_FHP) if a != 'Output']
     
+    now = datetime.now(mexico_tz)
+    for area in performance_data:
+        for turno in performance_data[area]:
+            turno_data = performance_data[area][turno]
+            pronostico = turno_data.get('pronostico', 0)
+            producido_actual = turno_data.get('producido', 0)
+            turno_data['status'] = 'on_track'
+            turno_data['eficiencia'] = round((producido_actual / pronostico) * 100, 1) if pronostico > 0 else 0
+
+            if today_date == datetime.now(mexico_tz).date() and pronostico > 0:
+                horas_del_turno = HORAS_TURNO.get(turno, [])
+                if not horas_del_turno: continue
+                horas_pasadas = 0
+                for hora_str in horas_del_turno:
+                    try:
+                        hora_obj = datetime.strptime(hora_str, '%I%p').time()
+                        target_datetime = datetime.combine(today_date, hora_obj)
+                        if now > (target_datetime + timedelta(hours=1)):
+                            horas_pasadas += 1
+                    except ValueError: continue
+                
+                if horas_pasadas > 0:
+                    produccion_esperada = (pronostico / len(horas_del_turno)) * horas_pasadas
+                    if producido_actual < (produccion_esperada * 0.9): turno_data['status'] = 'at_risk'
+                    if producido_actual < (produccion_esperada * 0.7): turno_data['status'] = 'behind'
+
     output_data = get_output_data(group_upper, today_str)
     
     return render_template('dashboard_group.html', 
-                           production_data=group_performance_data, 
-                           summary=summary_today, areas=areas_list, 
-                           turnos=NOMBRES_TURNOS, today=today_str, 
-                           group_name=group_upper, output_data=output_data)
+                           production_data=performance_data, 
+                           summary=summary_today, 
+                           areas=areas_list, 
+                           turnos=NOMBRES_TURNOS, 
+                           today=today_str, 
+                           group_name=group_upper,
+                           output_data=output_data,
+                           horas_turno=HORAS_TURNO)
 
 @app.route('/registro/<group>')
 @login_required
@@ -525,8 +570,8 @@ def captura(group):
         selected_date_str = request.form.get('fecha')
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
         
-        now_mexico = datetime.now(mexico_tz)
-        capture_date = now_mexico.date()
+        now = datetime.now(mexico_tz)
+        capture_date = now.date()
         
         audit_note = f" (Capturado el {capture_date.strftime('%Y-%m-%d')} para la fecha {selected_date_str})." if selected_date != capture_date else ""
 
@@ -556,7 +601,7 @@ def captura(group):
                         prod_val = int(prod_val_str)
                         existing_prod = db_session.query(ProduccionCaptura).filter_by(fecha=selected_date, grupo=group_upper, area=area, hora=hora).first()
                         if not existing_prod:
-                            new_entry = ProduccionCaptura(fecha=selected_date, grupo=group_upper, area=area, hora=hora, valor_producido=prod_val, usuario_captura=session.get('username'), fecha_captura=now_mexico)
+                            new_entry = ProduccionCaptura(fecha=selected_date, grupo=group_upper, area=area, hora=hora, valor_producido=prod_val, usuario_captura=session.get('username'), fecha_captura=now)
                             db_session.add(new_entry)
                             changes_detected = True
                             log_activity("Creación Producción", f"Área: {area}, H: {hora}. Valor: {prod_val}.{audit_note}", group_upper, 'Datos', 'Info')
@@ -564,7 +609,7 @@ def captura(group):
                             old_val = existing_prod.valor_producido or 0
                             existing_prod.valor_producido = prod_val
                             existing_prod.usuario_captura = session.get('username')
-                            existing_prod.fecha_captura = now_mexico
+                            existing_prod.fecha_captura = now
                             changes_detected = True
                             log_activity("Modificación Producción", f"Área: {area}, H: {hora}. Valor: {old_val} -> {prod_val}.{audit_note}", group_upper, 'Datos', 'Info')
 
@@ -575,7 +620,7 @@ def captura(group):
                 prod_out_val = int(prod_out_str or 0)
                 existing_output = db_session.query(OutputData).filter_by(fecha=selected_date, grupo=group_upper).first()
                 if not existing_output:
-                    new_output = OutputData(fecha=selected_date, grupo=group_upper, pronostico=pron_out_val, output=prod_out_val, usuario_captura=session.get('username'), fecha_captura=now_mexico)
+                    new_output = OutputData(fecha=selected_date, grupo=group_upper, pronostico=pron_out_val, output=prod_out_val, usuario_captura=session.get('username'), fecha_captura=now)
                     db_session.add(new_output)
                     changes_detected = True
                 else:
@@ -608,16 +653,16 @@ def submit_reason():
         date_str, area, group, reason, turno_name = request.form.get('date'), request.form.get('area'), request.form.get('group'), request.form.get('reason'), request.form.get('turno_name')
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         username = session.get('username')
-        now_mexico = datetime.now(mexico_tz)
+        now = datetime.now(mexico_tz)
         
         pronostico_entry = db_session.query(Pronostico).filter_by(fecha=date_obj, grupo=group, area=area, turno=turno_name).first()
         if pronostico_entry:
             old_reason = pronostico_entry.razon_desviacion
-            pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, now_mexico
+            pronostico_entry.razon_desviacion, pronostico_entry.usuario_razon, pronostico_entry.fecha_razon = reason, username, now
             if old_reason != reason: 
                 log_activity("Registro de Razón", f"Área: {area}, Turno: {turno_name}. Razón: '{reason}'", group, 'Datos', 'Warning')
         else:
-            new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=now_mexico)
+            new_entry = Pronostico(fecha=date_obj, grupo=group, area=area, turno=turno_name, valor_pronostico=0, razon_desviacion=reason, usuario_razon=username, fecha_razon=now)
             db_session.add(new_entry)
             log_activity("Registro de Razón (Nuevo)", f"Área: {area}, Turno: {turno_name}. Razón: '{reason}'", group, 'Datos', 'Warning')
         
@@ -702,6 +747,7 @@ def export_excel(group):
         producido_total_col_letter = chr(ord('A') + df.columns.get_loc('Producido Total'))
         meta_col_letter = chr(ord('A') + df.columns.get_loc('Meta'))
 
+
         column_chart.add_series({
             'name': f'=RegistroProduccion!${producido_total_col_letter}$2', 'categories': f'=RegistroProduccion!$A$3:$A${num_rows + 2}',
             'values': f'=RegistroProduccion!${producido_total_col_letter}$3:${producido_total_col_letter}${num_rows + 2}',
@@ -759,7 +805,7 @@ def centro_acciones():
         for s in q.all():
             items.append({'id': s.id, 'tipo': f"Corrección ({s.tipo_error})", 'timestamp': s.timestamp, 'fecha_evento': s.fecha_problema, 'grupo': s.grupo, 'area': s.area, 'turno': s.turno, 'usuario': s.usuario_solicitante, 'detalles': s.descripcion, 'status': s.status})
 
-    items.sort(key=lambda x: x.get('timestamp') or datetime.min.replace(tzinfo=pytz.UTC), reverse=True)
+    items.sort(key=lambda x: x.get('timestamp') or datetime.min, reverse=True)
     return render_template('centro_acciones.html', items=items, filtros=filtros)
 
 @app.route('/solicitar_correccion', methods=['POST'])
@@ -930,10 +976,10 @@ def activity_log():
     query = db_session.query(ActivityLog, Usuario).outerjoin(Usuario, ActivityLog.username == Usuario.username)
     
     if filtros.get('fecha_inicio'): 
-        start_date = mexico_tz.localize(datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d'))
+        start_date = datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d')
         query = query.filter(ActivityLog.timestamp >= start_date)
     if filtros.get('fecha_fin'): 
-        end_date = mexico_tz.localize(datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d')) + timedelta(days=1)
+        end_date = datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d') + timedelta(days=1)
         query = query.filter(ActivityLog.timestamp < end_date)
         
     if filtros.get('usuario'): query = query.filter(ActivityLog.username.ilike(f"%{filtros['usuario']}%"))
@@ -947,6 +993,9 @@ def activity_log():
     log_severities = ['Info', 'Warning', 'Critical']
 
     return render_template('activity_log.html', logs=logs, filtros=filtros, log_categories=log_categories, log_severities=log_severities)
+
+# Define la zona horaria de México
+mexico_tz = pytz.timezone('America/Mexico_City')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
