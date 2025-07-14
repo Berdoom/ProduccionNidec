@@ -29,19 +29,19 @@
                     <small class="form-text text-muted">Dejar en blanco para no cambiar la contraseña.</small>
                 </div>
                 <div class="form-group">
-                    <label for="role" class="font-weight-bold">Rol:</label>
-                    <select class="form-control" id="role" name="role">
-                        <option value="IHP" {% if user.role == 'IHP' %}selected{% endif %}>IHP</option>
-                        <option value="FHP" {% if user.role == 'FHP' %}selected{% endif %}>FHP</option>
-                        <option value="ADMIN" {% if user.role == 'ADMIN' %}selected{% endif %}>ADMIN</option>
+                    <label for="role_id" class="font-weight-bold">Rol:</label>
+                    <select class="form-control" id="role_id" name="role_id" required>
+                        {% for role in all_roles %}
+                        <option value="{{ role.id }}" {% if user.role_id == role.id %}selected{% endif %}>{{ role.nombre }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="turno" class="font-weight-bold">Turno:</label>
-                    <select class="form-control" id="turno" name="turno">
-                        <option value="" {% if not user.turno %}selected{% endif %}>N/A</option>
-                        {% for turno_name in nombres_turnos %}
-                        <option value="{{ turno_name }}" {% if user.turno == turno_name %}selected{% endif %}>{{ turno_name }}</option>
+                    <label for="turno_id" class="font-weight-bold">Turno:</label>
+                    <select class="form-control" id="turno_id" name="turno_id">
+                        <option value="">-- Seleccionar Turno --</option>
+                        {% for turno in all_turnos %}
+                        <option value="{{ turno.id }}" {% if user.turno_id == turno.id %}selected{% endif %}>{{ turno.nombre }}</option>
                         {% endfor %}
                     </select>
                 </div>

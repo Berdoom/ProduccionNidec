@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Producción Nidec{% endblock %}</title>
     
-    <!-- Frameworks y Librerías -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     
-    <!-- Recursos Propios -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
 </head>
 <body>
     {% if session.get('loggedin') %}
@@ -23,7 +20,6 @@
             </a>
             <h3 class="ml-3 mb-0 page-header-text">{% block page_header %}Panel Principal{% endblock %}</h3>
         </div>
-        <!-- Información de usuario para Escritorio -->
         <div class="user-info d-none d-lg-flex align-items-center">
             <span class="mr-3">
                 <i class="fas fa-user-circle"></i> 
@@ -59,6 +55,10 @@
                         <li class="nav-item {% if 'registro' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('registro', group=session.role.lower()) }}"><i class="fas fa-history mr-1"></i>Registro</a></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
                     
+                    <!-- Menú para el nuevo rol -->
+                    {% elif session.role == 'PROGRAMA_LM' %}
+                         <li class="nav-item {% if 'programa_lm' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('programa_lm') }}"><i class="fas fa-tasks mr-1"></i>Programa LM</a></li>
+
                     <!-- Menú para Administradores -->
                     {% elif session.role == 'ADMIN' %}
                         <li class="nav-item {% if 'dashboard_admin' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard Admin</a></li>
@@ -66,10 +66,17 @@
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs mr-1"></i>FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
                         <li class="nav-item {% if 'centro_acciones' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('centro_acciones') }}"><i class="fas fa-bell mr-1"></i>Centro de Acciones</a></li>
-                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-tools mr-1"></i>Herramientas</a><div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin"><a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a><a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a></div></li>
+                        <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-tools mr-1"></i>Herramientas</a>
+                            <div class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
+                                <a class="dropdown-item" href="{{ url_for('manage_users') }}">Gestionar Usuarios</a>
+                                <a class="dropdown-item" href="{{ url_for('manage_roles') }}">Gestionar Roles</a>
+                                <a class="dropdown-item" href="{{ url_for('manage_turnos') }}">Gestionar Turnos</a>
+                                <div class="dropdown-divider"></div>
+                                <a class="dropdown-item" href="{{ url_for('activity_log') }}">Log de Actividad</a>
+                            </div>
+                        </li>
                     {% endif %}
                 </ul>
-                <!-- Lado derecho de la Navbar (Escritorio) -->
                 <ul class="navbar-nav ml-auto d-none d-lg-flex">
                     {% if session.role == 'ADMIN' %}
                     <li class="nav-item">
@@ -82,7 +89,6 @@
                     </li>
                     {% endif %}
                 </ul>
-                <!-- Información de usuario para Móvil (dentro del menú hamburguesa) -->
                 <ul class="navbar-nav d-lg-none">
                     <li class="nav-item pt-2 pb-2" style="border-top: 1px solid rgba(255,255,255,0.2);">
                         <span class="nav-link text-white-50">
@@ -103,37 +109,30 @@
     {% endif %}
 
     <main class="container-fluid mb-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="toast-container" style="position: fixed; top: 90px; right: 20px; z-index: 1055;">
+                    {% for category, message in messages %}
+                        <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
+                            <div class="toast-header bg-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' if category == 'warning' else 'info' }} text-white">
+                                <strong class="mr-auto">
+                                    {% if category == 'success' %}Éxito
+                                    {% elif category == 'danger' %}Error
+                                    {% elif category == 'warning' %}Advertencia
+                                    {% else %}Notificación
+                                    {% endif %}
+                                </strong>
+                                <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close"><span aria-hidden="true">×</span></button>
+                            </div>
+                            <div class="toast-body bg-white">{{ message }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Contenedor para los mensajes flash (toasts) -->
-    <div aria-live="polite" aria-atomic="true" class="toast-container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-delay="5000">
-                        <div class="toast-header bg-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' if category == 'warning' else 'info' }} text-white">
-                            <strong class="mr-auto">
-                                {% if category == 'success' %}Éxito
-                                {% elif category == 'danger' %}Error
-                                {% elif category == 'warning' %}Advertencia
-                                {% else %}Notificación
-                                {% endif %}
-                            </strong>
-                            <button type="button" class="ml-2 mb-1 close" data-dismiss="toast" aria-label="Close">
-                                <span aria-hidden="true">×</span>
-                            </button>
-                        </div>
-                        <div class="toast-body bg-white">
-                            {{ message }}
-                        </div>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    </div>
-
-    <!-- Scripts de JavaScript -->
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -141,14 +140,9 @@
 
     <script>
         $(document).ready(function() {
-            // Inicializar toasts
             $('.toast').toast('show');
-            
-            // Script global para deshabilitar botones de submit y mostrar spinner
             $('form').on('submit', function(e) {
-                if ($(this).data('no-spinner')) {
-                    return;
-                }
+                if ($(this).data('no-spinner')) { return; }
                 const button = $(this).find('button[type="submit"]');
                 if (button.length > 0 && !button.is(':disabled')) {
                     button.prop('disabled', true);

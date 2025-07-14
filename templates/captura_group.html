@@ -153,7 +153,7 @@
                 <tbody>
                     <tr>
                         <td style="font-weight: 600;">Output</td>
-                        <td><input type="number" name="pronostico_output" class="form-control adaptive-font" value="{{ output_data.pronostico | e }}" min="0" {% if output_data.pronostico is not none and output_data.pronostico|string != '' and session.role != 'ADMIN' %}readonly{% endif %}></td>
+                        <td><input type="number" name="pronostico_output" class="form-control adaptive-font" value="{{ output_data.pronostico | e }}" min="0" {% if output_data.pronostico and output_data.pronostico > 0 and session.role != 'ADMIN' %}readonly{% endif %}></td>
                         <td><input type="number" name="produccion_output" class="form-control adaptive-font" value="{{ output_data.output | e }}" min="0"></td>
                     </tr>
                 </tbody>

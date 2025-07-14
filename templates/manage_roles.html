@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestionar Roles{% endblock %}
+{% block page_header %}Gestión de Roles{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="content-section">
+            <h4>Crear Nuevo Rol</h4>
+            <hr>
+            <form action="{{ url_for('manage_roles') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                <div class="form-group">
+                    <label for="nombre" class="font-weight-bold">Nombre del Rol:</label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" required placeholder="Ej: PROGRAMA_LM">
+                    <small class="form-text text-muted">El nombre debe estar en mayúsculas y sin espacios (use guion bajo). Ej: MI_NUEVO_ROL</small>
+                </div>
+                <button type="submit" class="btn btn-nidec-style btn-block">Crear Rol</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="content-section">
+            <h4>Roles Actuales</h4>
+            <hr>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre del Rol</th>
+                            <th>Usuarios Asignados</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rol in roles %}
+                        <tr>
+                            <td>{{ rol.id }}</td>
+                            <td><strong>{{ rol.nombre }}</strong></td>
+                            <td>{{ rol.usuarios | length }}</td>
+                            <td>
+                                {% if rol.nombre not in ['ADMIN', 'IHP', 'FHP'] %}
+                                    <form action="{{ url_for('delete_role', role_id=rol.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este rol?');" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                                    </form>
+                                {% else %}
+                                    <small class="text-muted">(Rol del sistema)</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestionar Turnos{% endblock %}
+{% block page_header %}Gestión de Turnos{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="content-section">
+            <h4>Crear Nuevo Turno</h4>
+            <hr>
+            <form action="{{ url_for('manage_turnos') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                <div class="form-group">
+                    <label for="nombre" class="font-weight-bold">Nombre del Turno:</label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" required placeholder="Ej: Turno D">
+                </div>
+                <button type="submit" class="btn btn-nidec-style btn-block">Crear Turno</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="content-section">
+            <h4>Turnos Actuales</h4>
+            <hr>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre del Turno</th>
+                            <th>Usuarios Asignados</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for turno in turnos %}
+                        <tr>
+                            <td>{{ turno.id }}</td>
+                            <td><strong>{{ turno.nombre }}</strong></td>
+                            <td>{{ turno.usuarios | length }}</td>
+                            <td>
+                                <form action="{{ url_for('delete_turno', turno_id=turno.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este turno?');" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                    <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

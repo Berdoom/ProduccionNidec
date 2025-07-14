@@ -30,19 +30,20 @@
                     <input type="password" class="form-control" id="password" name="password" required>
                 </div>
                 <div class="form-group">
-                    <label for="role" class="font-weight-bold">Rol:</label>
-                    <select class="form-control" id="role" name="role">
-                        <option value="IHP">IHP</option>
-                        <option value="FHP">FHP</option>
-                        <option value="ADMIN">ADMIN</option>
+                    <label for="role_id" class="font-weight-bold">Rol:</label>
+                    <select class="form-control" id="role_id" name="role_id" required>
+                        <option value="">-- Seleccionar Rol --</option>
+                        {% for role in all_roles %}
+                        <option value="{{ role.id }}">{{ role.nombre }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="turno" class="font-weight-bold">Turno:</label>
-                    <select class="form-control" id="turno" name="turno">
-                        <option value="">N/A</option>
-                        {% for turno_name in nombres_turnos %}
-                        <option value="{{ turno_name }}">{{ turno_name }}</option>
+                    <label for="turno_id" class="font-weight-bold">Turno:</label>
+                    <select class="form-control" id="turno_id" name="turno_id">
+                        <option value="">-- Seleccionar Turno --</option>
+                        {% for turno in all_turnos %}
+                        <option value="{{ turno.id }}">{{ turno.nombre }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -66,15 +67,17 @@
                             <div class="form-group col-md-6"><label for="filter_username">Usuario:</label><input type="text" class="form-control" id="filter_username" name="username" placeholder="Filtrar por usuario..." value="{{ filtros.get('username', '') }}"></div>
                             <div class="form-group col-md-6"><label for="filter_nombre_completo">Nombre Completo:</label><input type="text" class="form-control" id="filter_nombre_completo" name="nombre_completo" placeholder="Filtrar por nombre..." value="{{ filtros.get('nombre_completo', '') }}"></div>
                             <div class="form-group col-md-6">
-                                <label for="filter_role">Rol:</label>
-                                <select id="filter_role" name="role" class="form-control"><option value="Todos">Todos</option><option value="ADMIN" {% if filtros.get('role') == 'ADMIN' %}selected{% endif %}>ADMIN</option><option value="IHP" {% if filtros.get('role') == 'IHP' %}selected{% endif %}>IHP</option><option value="FHP" {% if filtros.get('role') == 'FHP' %}selected{% endif %}>FHP</option></select>
+                                <label for="filter_role_id">Rol:</label>
+                                <select id="filter_role_id" name="role_id" class="form-control">
+                                    <option value="">Todos</option>
+                                    {% for role in all_roles %}<option value="{{ role.id }}" {% if filtros.get('role_id')|string == role.id|string %}selected{% endif %}>{{ role.nombre }}</option>{% endfor %}
+                                </select>
                             </div>
                              <div class="form-group col-md-6">
-                                <label for="filter_turno">Turno:</label>
-                                <select id="filter_turno" name="turno" class="form-control">
-                                    <option value="Todos">Todos</option>
-                                    <option value="N/A" {% if filtros.get('turno') == 'N/A' %}selected{% endif %}>N/A</option>
-                                    {% for turno_name in nombres_turnos %}<option value="{{ turno_name }}" {% if filtros.get('turno') == turno_name %}selected{% endif %}>{{ turno_name }}</option>{% endfor %}
+                                <label for="filter_turno_id">Turno:</label>
+                                <select id="filter_turno_id" name="turno_id" class="form-control">
+                                    <option value="">Todos</option>
+                                    {% for turno in all_turnos %}<option value="{{ turno.id }}" {% if filtros.get('turno_id')|string == turno.id|string %}selected{% endif %}>{{ turno.nombre }}</option>{% endfor %}
                                 </select>
                             </div>
                         </div>
@@ -106,17 +109,10 @@
                             <td>{{ user.username }}</td>
                             <td>{{ user.nombre_completo or 'N/A' }}</td>
                             <td>{{ user.cargo or 'N/A' }}</td>
-                            <td>
-                                {% if user.role == 'ADMIN' %}<span class="badge badge-role-admin">{{ user.role }}</span>
-                                {% elif user.role == 'IHP' %}<span class="badge badge-role-ihp">{{ user.role }}</span>
-                                {% elif user.role == 'FHP' %}<span class="badge badge-role-fhp">{{ user.role }}</span>
-                                {% else %}<span class="badge badge-secondary">{{ user.role }}</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ user.turno or 'N/A' }}</td>
+                            <td><span class="badge badge-info">{{ user.role.nombre if user.role else 'N/A' }}</span></td>
+                            <td>{{ user.turno.nombre if user.turno else 'N/A' }}</td>
                             <td>
                                 {% if user.id != session.user_id %}
-                                    <!-- CAMBIO: Se ajusta el espaciado y la alineación de los botones -->
                                     <a href="{{ url_for('edit_user', user_id=user.id) }}" class="btn btn-sm btn-warning mr-2">
                                         <i class="fas fa-edit"></i> Editar
                                     </a>
