@@ -672,6 +672,37 @@ def add_column_lm():
         log_activity("Creación Columna LM", f"Nueva columna creada: {nombre_columna}", "ADMIN", "Datos", "Info")
         flash("Nueva columna agregada exitosamente.", "success")
     return redirect(url_for('programa_lm'))
+@app.route('/programa_lm/delete_column/<int:columna_id>', methods=['POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def delete_column_lm(columna_id):
+    """
+    Elimina una columna completa del Programa LM y todos sus datos asociados.
+    Solo accesible para Administradores.
+    """
+    try:
+        columna_a_eliminar = db_session.query(ColumnaLM).get(columna_id)
+        
+        if columna_a_eliminar:
+            nombre_columna = columna_a_eliminar.nombre
+            
+            # Gracias al 'cascade' en el modelo, al borrar la columna,
+            # SQLAlchemy también borrará todos los DatoCeldaLM asociados.
+            db_session.delete(columna_a_eliminar)
+            db_session.commit()
+            
+            log_activity("Eliminación Columna LM", f"Columna '{nombre_columna}' (ID: {columna_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
+            flash(f"La columna '{nombre_columna}' y todos sus datos han sido eliminados exitosamente.", "success")
+        else:
+            flash("La columna que intentas eliminar no existe.", "danger")
+            
+    except exc.SQLAlchemyError as e:
+        db_session.rollback()
+        flash(f"Error al eliminar la columna: {e}", "danger")
+        log_activity("Error Eliminación Columna LM", f"Error al intentar borrar columna ID {columna_id}: {e}", "ADMIN", "Error", "Critical")
+
+    return redirect(url_for('programa_lm'))
 
 @app.route('/centro_acciones')
 @login_required
