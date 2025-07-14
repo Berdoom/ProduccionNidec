@@ -1,16 +1,82 @@
 {% extends "layout.html" %}
 
 {% block title %}Programa LM{% endblock %}
-{% block page_header %}Programa LM{% endblock %}
+{% block page_header %}Seguimiento de Órdenes de Trabajo (LM){% endblock %}
 
 {% block content %}
 <div class="content-section">
-    <h3 class="mb-4">Bienvenido al Programa LM</h3>
-    <p>Esta sección está dedicada a las funcionalidades específicas del rol "Programa LM".</p>
-    
-    <div class="alert alert-info">
-        <h4 class="alert-heading">Página en Construcción</h4>
-        <p>El contenido y las herramientas para esta vista se añadirán próximamente.</p>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Listado de Órdenes</h4>
+        {% if session.role == 'ADMIN' %}
+        <div>
+            <button class="btn btn-nidec-style" data-toggle="modal" data-target="#addRowModal">
+                <i class="fas fa-plus mr-1"></i> Añadir Fila (Orden)
+            </button>
+            <button class="btn btn-secondary" data-toggle="modal" data-target="#addColumnModal">
+                <i class="fas fa-columns mr-1"></i> Añadir Columna
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover lm-table">
+            <thead class="thead-light">
+                <tr>
+                    <!-- Cabeceras fijas -->
+                    <th>WIP order</th>
+                    <th>Item</th>
+                    <th>QTY</th>
+                    <!-- Cabeceras dinámicas -->
+                    {% for columna in columnas %}
+                        <th>{{ columna.nombre }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for orden in ordenes %}
+                <tr>
+                    <!-- Celdas fijas (solo editables por admin) -->
+                    <td contenteditable="{{ 'true' if session.role == 'ADMIN' else 'false' }}" class="editable-cell fixed-col" data-orden-id="{{ orden.id }}" data-field="wip_order">{{ orden.wip_order }}</td>
+                    <td contenteditable="{{ 'true' if session.role == 'ADMIN' else 'false' }}" class="editable-cell fixed-col" data-orden-id="{{ orden.id }}" data-field="item">{{ orden.item }}</td>
+                    <td contenteditable="{{ 'true' if session.role == 'ADMIN' else 'false' }}" class="editable-cell fixed-col" data-orden-id="{{ orden.id }}" data-field="qty">{{ orden.qty }}</td>
+                    
+                    <!-- Celdas dinámicas -->
+                    {% for columna in columnas %}
+                        {% set editable = 'true' if session.role == 'ADMIN' or columna.editable_por_lm else 'false' %}
+                        <td contenteditable="{{ editable }}" class="editable-cell" 
+                            data-orden-id="{{ orden.id }}" 
+                            data-columna-id="{{ columna.id }}">
+                            {{- datos.get(orden.id, {}).get(columna.id, '') -}}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="{{ 3 + columnas|length }}" class="text-center text-muted py-4">No hay órdenes para mostrar. ¡Añade una para empezar!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
+
+<!-- Modales para Admin -->
+{% if session.role == 'ADMIN' %}
+{% include 'modals/lm_add_row_modal.html' %}
+{% include 'modals/lm_add_column_modal.html' %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/programa_lm.js') }}"></script>
+<script>
+    // Inicializar el script con las URLs necesarias
+    document.addEventListener('DOMContentLoaded', function() {
+        const updateUrl = "{{ url_for('update_cell_lm') }}";
+        const csrfToken = "{{ session.csrf_token }}";
+        initializeLMTable(updateUrl, csrfToken);
+    });
+</script>
 {% endblock %}
