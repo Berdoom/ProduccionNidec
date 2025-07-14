@@ -1,0 +1,98 @@
+{% extends "layout.html" %}
+
+{% block title %}Programa LM{% endblock %}
+{% block page_header %}Seguimiento de Órdenes de Trabajo (LM){% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Listado de Órdenes</h4>
+        {% if session.role == 'ADMIN' %}
+        <div>
+            <button class="btn btn-nidec-style" data-toggle="modal" data-target="#addRowModal">
+                <i class="fas fa-plus mr-1"></i> Añadir Fila (Orden)
+            </button>
+            <button class="btn btn-secondary" data-toggle="modal" data-target="#addColumnModal">
+                <i class="fas fa-columns mr-1"></i> Añadir Columna
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover lm-table">
+            <thead class="thead-light">
+                <tr>
+                    <!-- Cabeceras fijas -->
+                    <th style="min-width: 150px;">WIP order</th>
+                    <th style="min-width: 150px;">Item</th>
+                    <th style="min-width: 70px;">QTY</th>
+                    
+                    <!-- Cabeceras dinámicas con botón de eliminar -->
+                    {% for columna in columnas %}
+                        <th style="min-width: 180px;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ columna.nombre }}</span>
+                                
+                                <!-- Botón de eliminar solo para ADMIN -->
+                                {% if session.role == 'ADMIN' %}
+                                <form action="{{ url_for('delete_column_lm', columna_id=columna.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar la columna \'{{ columna.nombre }}\' y TODOS sus datos? Esta acción no se puede deshacer.');">
+                                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger p-0" style="width: 20px; height: 20px; line-height: 1;" title="Eliminar Columna {{ columna.nombre }}">
+                                        ×
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for orden in ordenes %}
+                <tr>
+                    <!-- Celdas fijas (no editables por ahora para simplificar JS) -->
+                    <td>{{ orden.wip_order }}</td>
+                    <td>{{ orden.item or '' }}</td>
+                    <td>{{ orden.qty }}</td>
+                    
+                    <!-- Celdas dinámicas editables -->
+                    {% for columna in columnas %}
+                        {% set editable = 'true' if session.role == 'ADMIN' or columna.editable_por_lm else 'false' %}
+                        <td contenteditable="{{ editable }}" 
+                            class="{% if editable == 'true' %}editable-cell{% endif %}"
+                            data-orden-id="{{ orden.id }}" 
+                            data-columna-id="{{ columna.id }}">
+                            {{- datos.get(orden.id, {}).get(columna.id, '') -}}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="{{ 3 + columnas|length }}" class="text-center text-muted py-4">No hay órdenes para mostrar. ¡Añade una para empezar!</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modales para Admin -->
+{% if session.role == 'ADMIN' %}
+    {% include 'modals/lm_add_row_modal.html' %}
+    {% include 'modals/lm_add_column_modal.html' %}
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/programa_lm.js') }}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar el script de la tabla con las URLs y tokens necesarios
+        const updateUrl = "{{ url_for('update_cell_lm') }}";
+        const csrfToken = "{{ session.csrf_token }}";
+        initializeLMTable(updateUrl, csrfToken);
+    });
+</script>
+{% endblock %}

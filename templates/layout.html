@@ -55,7 +55,7 @@
                         <li class="nav-item {% if 'registro' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('registro', group=session.role.lower()) }}"><i class="fas fa-history mr-1"></i>Registro</a></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
                     
-                    <!-- Menú para el nuevo rol -->
+                    <!-- Menú para el rol PROGRAMA_LM -->
                     {% elif session.role == 'PROGRAMA_LM' %}
                          <li class="nav-item {% if 'programa_lm' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('programa_lm') }}"><i class="fas fa-tasks mr-1"></i>Programa LM</a></li>
 
@@ -64,6 +64,8 @@
                         <li class="nav-item {% if 'dashboard_admin' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('dashboard_admin') }}"><i class="fas fa-tachometer-alt mr-1"></i>Dashboard Admin</a></li>
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownIHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-industry mr-1"></i>IHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownIHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='ihp') }}">Dashboard IHP</a><a class="dropdown-item" href="{{ url_for('captura', group='ihp') }}">Captura IHP</a><a class="dropdown-item" href="{{ url_for('registro', group='ihp') }}">Registro IHP</a></div></li>
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownFHP" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-cogs mr-1"></i>FHP</a><div class="dropdown-menu" aria-labelledby="navbarDropdownFHP"><a class="dropdown-item" href="{{ url_for('dashboard_group', group='fhp') }}">Dashboard FHP</a><a class="dropdown-item" href="{{ url_for('captura', group='fhp') }}">Captura FHP</a><a class="dropdown-item" href="{{ url_for('registro', group='fhp') }}">Registro FHP</a></div></li>
+                        <!-- ENLACE AÑADIDO AQUÍ -->
+                        <li class="nav-item {% if 'programa_lm' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('programa_lm') }}"><i class="fas fa-tasks mr-1"></i>Programa LM</a></li>
                         <li class="nav-item {% if 'reportes' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('reportes') }}"><i class="fas fa-chart-bar mr-1"></i>Reportes</a></li>
                         <li class="nav-item {% if 'centro_acciones' in request.path %}active{% endif %}"><a class="nav-link" href="{{ url_for('centro_acciones') }}"><i class="fas fa-bell mr-1"></i>Centro de Acciones</a></li>
                         <li class="nav-item dropdown"><a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fas fa-tools mr-1"></i>Herramientas</a>
