@@ -1,17 +1,17 @@
 import os
 import sys
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Date, Text, inspect, text, UniqueConstraint, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, scoped_session, relationship
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError, NoSuchTableError
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 
+# Cargar variables de entorno desde el archivo .env
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# --- Bloque de configuración de DATABASE_URL (sin cambios) ---
 if not DATABASE_URL:
     if os.getenv('RENDER'):
         print("FATAL ERROR: La variable de entorno DATABASE_URL no está definida en el entorno de Render.", file=sys.stderr)
@@ -46,7 +46,7 @@ except Exception as e:
 Base = declarative_base()
 Base.query = db_session.query_property()
 
-# --- Modelos de la Base de Datos (sin cambios) ---
+# --- Modelos de la Base de Datos ---
 class Rol(Base):
     __tablename__ = 'roles'
     id = Column(Integer, primary_key=True)
@@ -82,18 +82,38 @@ class ActivityLog(Base): __tablename__ = 'activity_logs'; id = Column(Integer, p
 class OutputData(Base): __tablename__ = 'output_data'; id = Column(Integer, primary_key=True); fecha = Column(Date, nullable=False, index=True); grupo = Column(String(10), nullable=False, index=True); pronostico = Column(Integer); output = Column(Integer); usuario_captura = Column(String(80)); fecha_captura = Column(DateTime, default=datetime.utcnow)
 class SolicitudCorreccion(Base): __tablename__ = 'solicitudes_correccion'; id = Column(Integer, primary_key=True); timestamp = Column(DateTime, default=datetime.utcnow, index=True); usuario_solicitante = Column(String(80), nullable=False); fecha_problema = Column(Date, nullable=False); grupo = Column(String(10), nullable=False); area = Column(String(50)); turno = Column(String(20)); tipo_error = Column(String(100), nullable=False); descripcion = Column(Text, nullable=False); status = Column(String(50), default='Pendiente', index=True); admin_username = Column(String(80)); fecha_resolucion = Column(DateTime); admin_notas = Column(Text)
 
+class OrdenLM(Base):
+    __tablename__ = 'ordenes_lm'
+    id = Column(Integer, primary_key=True)
+    wip_order = Column(String(100), unique=True, nullable=False)
+    item = Column(String(100))
+    qty = Column(Integer, nullable=False, default=1)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+class ColumnaLM(Base):
+    __tablename__ = 'columnas_lm'
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(100), unique=True, nullable=False)
+    orden = Column(Integer, default=100)
+    editable_por_lm = Column(Boolean, default=True, nullable=False)
+
+class DatoCeldaLM(Base):
+    __tablename__ = 'datos_celda_lm'
+    id = Column(Integer, primary_key=True)
+    orden_id = Column(Integer, ForeignKey('ordenes_lm.id', ondelete='CASCADE'), nullable=False)
+    columna_id = Column(Integer, ForeignKey('columnas_lm.id', ondelete='CASCADE'), nullable=False)
+    valor = Column(Text)
+    orden = relationship('OrdenLM', backref='celdas')
+    columna = relationship('ColumnaLM', backref='celdas')
+    __table_args__ = (UniqueConstraint('orden_id', 'columna_id', name='_orden_columna_uc'),)
+
 def _execute_migration(connection):
-    """
-    Ejecuta la migración de datos de texto a IDs relacionales de forma segura.
-    """
     print("Iniciando migración de datos de roles y turnos...")
     
-    # --- NUEVO: Añadir las columnas ANTES de usarlas ---
     print("Paso 1: Añadiendo columnas 'role_id' y 'turno_id' a la tabla 'usuarios'...")
     connection.execute(text("ALTER TABLE usuarios ADD COLUMN role_id INTEGER"))
     connection.execute(text("ALTER TABLE usuarios ADD COLUMN turno_id INTEGER"))
     
-    # --- NUEVO: Añadir las Foreign Keys ---
     print("Paso 2: Añadiendo Foreign Key constraints...")
     connection.execute(text("ALTER TABLE usuarios ADD CONSTRAINT fk_usuarios_role_id FOREIGN KEY (role_id) REFERENCES roles (id)"))
     connection.execute(text("ALTER TABLE usuarios ADD CONSTRAINT fk_usuarios_turno_id FOREIGN KEY (turno_id) REFERENCES turnos (id)"))
@@ -130,7 +150,6 @@ def init_db():
     try:
         user_columns = [c['name'] for c in inspector.get_columns('usuarios')]
         
-        # El disparador para la migración es la existencia de la columna 'role' (la antigua).
         if 'role' in user_columns:
             print("Detectada estructura de datos antigua. Se requiere migración.")
             try:
