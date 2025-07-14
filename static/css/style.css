@@ -301,3 +301,24 @@ body {
 .table-responsive thead th { position: -webkit-sticky; position: sticky; top: 0; z-index: 2; background-color: #e9ecef; }
 .table-responsive tbody td:first-child { position: -webkit-sticky; position: sticky; left: 0; z-index: 3; background-color: #f8f9fa; }
 .table-responsive thead th:first-child { left: 0; z-index: 4; }
+
+/* --- Estilos para la tabla LM --- */
+.lm-table .editable-cell[contenteditable="true"]:hover {
+    background-color: #f0f8ff;
+    cursor: cell;
+}
+
+.lm-table .editable-cell.saving {
+    background-color: #fffbe6; /* Amarillo claro */
+    transition: background-color 0.3s;
+}
+
+.lm-table .editable-cell.saved-success {
+    background-color: #d4edda; /* Verde claro */
+    transition: background-color 0.3s;
+}
+
+.lm-table .editable-cell.saved-error {
+    background-color: #f8d7da; /* Rojo claro */
+    transition: background-color 0.3s;
+}
