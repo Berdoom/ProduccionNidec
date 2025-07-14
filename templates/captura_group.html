@@ -13,7 +13,11 @@
         <!-- Selector de Fecha y Acciones Superiores -->
         <div class="form-row align-items-center mb-4">
             <div class="col-auto"><label for="fecha" class="col-form-label font-weight-bold">Fecha:</label></div>
-            <div class="col-sm-4"><input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date | e }}" onchange="this.form.method='get'; this.form.action='{{ url_for('captura', group=group_name.lower()) }}'; this.form.submit()"></div>
+            <!-- CAMBIO: El onchange ahora redirige directamente a la URL con la nueva fecha. Es más simple y robusto. -->
+            <div class="col-sm-4">
+                <input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date | e }}" 
+                       onchange="window.location.href = '{{ url_for('captura', group=group_name.lower()) }}?fecha=' + this.value;">
+            </div>
             <div class="col-auto"><a href="{{ url_for('captura', group=group_name.lower()) }}" class="btn btn-secondary"><i class="fas fa-calendar-day"></i> Hoy</a></div>
             <!-- Botón de Reportar para Móvil -->
             <div class="col-auto d-block d-lg-none">
