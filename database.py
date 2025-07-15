@@ -170,6 +170,7 @@ def _execute_migration():
 def create_default_admin():
     print("Verificando la existencia del usuario administrador...")
     try:
+        # --- Creación de roles y turnos por defecto (sin cambios) ---
         default_roles = ['ADMIN', 'IHP', 'FHP', 'PROGRAMA_LM']
         for role_name in default_roles:
             if not db_session.query(Rol).filter_by(nombre=role_name).first(): db_session.add(Rol(nombre=role_name))
@@ -177,19 +178,38 @@ def create_default_admin():
         for turno_name in default_turnos:
             if not db_session.query(Turno).filter_by(nombre=turno_name).first(): db_session.add(Turno(nombre=turno_name))
         db_session.commit()
+        
+        # --- NUEVA LÓGICA PARA CORREGIR USUARIOS SIN TURNO ---
+        # Primero, aseguramos que el turno 'N/A' existe y obtenemos su ID.
+        na_turno = db_session.query(Turno).filter_by(nombre='N/A').one_or_none()
+        if na_turno:
+            # Buscamos todos los usuarios cuyo turno_id sea NULO.
+            usuarios_sin_turno = db_session.query(Usuario).filter(Usuario.turno_id.is_(None)).all()
+            if usuarios_sin_turno:
+                print(f"Se encontraron {len(usuarios_sin_turno)} usuarios sin turno. Asignando 'N/A' por defecto...")
+                # A cada usuario encontrado, le asignamos el ID del turno 'N/A'.
+                for user in usuarios_sin_turno:
+                    user.turno_id = na_turno.id
+                db_session.commit()
+                print("Usuarios actualizados correctamente.")
+        # --- FIN DE LA NUEVA LÓGICA ---
+
+        # --- Verificación del admin (sin cambios) ---
         admin_role = db_session.query(Rol).filter_by(nombre='ADMIN').one_or_none()
         if not admin_role: print("ERROR CRÍTICO: El rol ADMIN no pudo ser creado o encontrado.", file=sys.stderr); return
         if not db_session.query(Usuario).filter(Usuario.role == admin_role).first():
             print("No se encontró usuario ADMIN. Creando usuario por defecto 'admin'...")
-            na_turno = db_session.query(Turno).filter_by(nombre='N/A').one()
-            default_admin = Usuario(username='admin', password='admin', role_id=admin_role.id, nombre_completo='Administrador del Sistema', cargo='Admin', turno_id=na_turno.id)
+            # Nos aseguramos que el admin también tenga el turno 'N/A'
+            na_turno_admin = db_session.query(Turno).filter_by(nombre='N/A').one()
+            default_admin = Usuario(username='admin', password='admin', role_id=admin_role.id, nombre_completo='Administrador del Sistema', cargo='Admin', turno_id=na_turno_admin.id)
             db_session.add(default_admin)
             db_session.commit()
             print("Usuario 'admin' creado exitosamente.")
         else: print("El usuario administrador ya existe.")
+
     except Exception as e:
         db_session.rollback()
-        print(f"ERROR al verificar/crear el usuario admin: {e}", file=sys.stderr)
+        print(f"ERROR al verificar/crear el usuario admin o al corregir turnos: {e}", file=sys.stderr)
 
 if __name__ == '__main__':
     print("\n--- INICIANDO CONFIGURACIÓN MANUAL DE LA BASE DE DATOS ---")

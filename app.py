@@ -1009,15 +1009,37 @@ def update_solicitud_status(solicitud_id):
 @csrf_required
 def manage_users():
     if request.method == 'POST' and request.form.get('form_type') == 'create_user':
-        username, password, role_id, turno_id, nombre, cargo = request.form.get('username'), request.form.get('password'), request.form.get('role_id'), request.form.get('turno_id'), request.form.get('nombre_completo'), request.form.get('cargo')
-        if not all([username, password, role_id, nombre, cargo]): flash('Todos los campos son obligatorios.', 'warning')
-        elif db_session.query(Usuario).filter_by(username=username).first(): flash(f"El usuario '{username}' ya existe.", 'danger')
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role_id = request.form.get('role_id')
+        turno_id = request.form.get('turno_id') # Puede venir vacío
+        nombre = request.form.get('nombre_completo')
+        cargo = request.form.get('cargo')
+
+        if not all([username, password, role_id, nombre, cargo]):
+            flash('Todos los campos son obligatorios, excepto el turno.', 'warning')
+        elif db_session.query(Usuario).filter_by(username=username).first():
+            flash(f"El usuario '{username}' ya existe.", 'danger')
         else:
-            db_session.add(Usuario(username=username, password=password, role_id=role_id, nombre_completo=nombre, cargo=cargo, turno_id=turno_id if turno_id else None)); db_session.commit()
+            # --- LÓGICA MODIFICADA ---
+            # Si no se seleccionó un turno, asignamos 'N/A' por defecto
+            if not turno_id:
+                na_turno = db_session.query(Turno).filter_by(nombre='N/A').one()
+                turno_id_to_save = na_turno.id
+            else:
+                turno_id_to_save = int(turno_id)
+            
+            # Creamos el usuario con un turno garantizado
+            db_session.add(Usuario(username=username, password=password, role_id=role_id, nombre_completo=nombre, cargo=cargo, turno_id=turno_id_to_save))
+            db_session.commit()
+            # --- FIN DE LA LÓGICA MODIFICADA ---
+
             rol = db_session.query(Rol).get(role_id)
             log_activity("Creación de usuario", f"Usuario '{username}' ({nombre}) creado con rol '{rol.nombre}'.", 'ADMIN', 'Seguridad', 'Info')
             flash(f"Usuario '{username}' creado exitosamente.", 'success')
         return redirect(url_for('manage_users'))
+    
+    # El resto de la función (la parte del GET) no cambia...
     if request.args.get('limpiar'): session.pop('user_filtros', None); return redirect(url_for('manage_users'))
     filtros, query = {}, db_session.query(Usuario).join(Rol).outerjoin(Turno)
     if any(arg in request.args for arg in ['username', 'nombre_completo', 'role_id', 'turno_id']):
@@ -1037,21 +1059,46 @@ def manage_users():
 @role_required(['ADMIN'])
 @csrf_required
 def edit_user(user_id):
-    user = db_session.query(Usuario).get_or_404(user_id)
+    # ===== CAMBIO AQUÍ =====
+    # Original: user = db_session.query(Usuario).get_or_404(user_id)
+    # Corrección: Usamos el método get() estándar y verificamos el resultado.
+    user = db_session.get(Usuario, user_id)
+    if not user:
+        abort(404) # Si el usuario no existe, se devuelve un error 404 (Not Found).
+    # ===== FIN DEL CAMBIO =====
+
     if request.method == 'POST':
         new_username = request.form.get('username')
-        if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first(): flash(f"El usuario '{new_username}' ya existe.", 'danger')
-        else: user.username = new_username
-        user.nombre_completo, user.cargo, user.role_id, user.turno_id = request.form.get('nombre_completo'), request.form.get('cargo'), request.form.get('role_id'), request.form.get('turno_id') or None
-        if request.form.get('password'): user.password_hash = generate_password_hash(request.form.get('password'))
-        try:
-            db_session.commit()
-            log_activity("Edición de usuario", f"Datos del usuario ID {user.id} ({user.username}) actualizados.", 'ADMIN', 'Seguridad', 'Warning')
-            flash('Usuario actualizado correctamente.', 'success')
-            return redirect(url_for('manage_users'))
-        except exc.IntegrityError as e:
-            db_session.rollback(); flash(f"Error de integridad: {e}", 'danger')
-    all_roles, all_turnos = db_session.query(Rol).order_by(Rol.nombre).all(), db_session.query(Turno).order_by(Turno.nombre).all()
+        if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first():
+            flash(f"El usuario '{new_username}' ya existe.", 'danger')
+        else:
+            user.username = new_username
+            user.nombre_completo = request.form.get('nombre_completo')
+            user.cargo = request.form.get('cargo')
+            user.role_id = request.form.get('role_id')
+            
+            # Asignamos 'N/A' si no se selecciona un turno
+            turno_id_str = request.form.get('turno_id')
+            if turno_id_str:
+                user.turno_id = int(turno_id_str)
+            else:
+                na_turno = db_session.query(Turno).filter_by(nombre='N/A').one()
+                user.turno_id = na_turno.id
+
+            if request.form.get('password'):
+                user.password_hash = generate_password_hash(request.form.get('password'))
+            
+            try:
+                db_session.commit()
+                log_activity("Edición de usuario", f"Datos del usuario ID {user.id} ({user.username}) actualizados.", 'ADMIN', 'Seguridad', 'Warning')
+                flash('Usuario actualizado correctamente.', 'success')
+                return redirect(url_for('manage_users'))
+            except exc.IntegrityError as e:
+                db_session.rollback()
+                flash(f"Error de integridad: {e}", 'danger')
+
+    all_roles = db_session.query(Rol).order_by(Rol.nombre).all()
+    all_turnos = db_session.query(Turno).order_by(Turno.nombre).all()
     return render_template('edit_user.html', user=user, all_roles=all_roles, all_turnos=all_turnos)
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
