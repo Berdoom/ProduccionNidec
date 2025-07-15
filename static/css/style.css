@@ -240,47 +240,98 @@ body {
 }
 
 /* ==========================================================================
-   LÓGICA DE VISIBILIDAD Y ANIMACIÓN PARA MÓVIL (CORREGIDA)
+   LÓGICA DE VISIBILIDAD PARA MÓVIL Y ESCRITORIO (VERSIÓN FINAL)
    ========================================================================== */
 
-/* Por defecto, se muestra la vista de escritorio y se oculta la de móvil */
+/*
+  Por defecto (en pantallas grandes/escritorio), se muestra la tabla completa
+  y la vista móvil está completamente oculta.
+*/
 .desktop-only-table {
     display: block;
 }
-.mobile-only-view {
+.mobile-only-container {
     display: none;
 }
 
 /*
-  Se cambia a la vista móvil (tarjetas o mensaje de rotar) ÚNICAMENTE
-  cuando la pantalla es angosta Y está en orientación vertical.
+  En pantallas pequeñas (como teléfonos), la lógica cambia.
 */
-@media (max-width: 768px) and (orientation: portrait) {
+@media (max-width: 991px) {
     .desktop-only-table {
         display: none;
     }
-    .mobile-only-view {
+    .mobile-only-container {
         display: block;
+    }
+    @media (orientation: landscape) {
+        .mobile-only-container {
+            display: none;
+        }
+        .desktop-only-table {
+            display: block;
+        }
     }
 }
 
-/* Estilos para el mensaje y animación de rotar el teléfono */
+/* ==========================================================================
+   NUEVOS ESTILOS PARA LA TABLA DE RESUMEN MÓVIL
+   ========================================================================== */
+.mobile-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.mobile-summary-table thead th {
+    background-color: #e9ecef;
+    font-size: 0.9rem;
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+}
+
+.mobile-summary-table tbody td {
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 0.95rem;
+}
+
+.mobile-summary-table .area-name-cell {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.mobile-summary-table .efficiency-cell {
+    text-align: center;
+    font-weight: bold;
+    border-radius: 4px;
+    color: white;
+}
+
+/* Clases de color para la eficiencia */
+.eff-red { background-color: var(--kpi-red); }
+.eff-yellow { background-color: var(--kpi-yellow); color: #333 !important; }
+.eff-green { background-color: var(--kpi-green); }
+.eff-grey { background-color: #adb5bd; }
+
 .rotate-device-prompt {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     color: var(--text-muted);
-    width: 100%;
-    min-height: 300px;
+    padding: 2rem 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    margin-top: 1.5rem;
+    text-align: center;
 }
 
 .phone-icon-container {
-    margin-bottom: 20px;
+    margin-bottom: 1rem;
 }
 
 .phone-icon-container .phone-icon {
-    font-size: 5rem;
+    font-size: 4rem;
     color: #adb5bd;
     animation: rotate-animation 2.5s ease-in-out infinite;
 }
@@ -321,4 +372,161 @@ body {
 .lm-table .editable-cell.saved-error {
     background-color: #f8d7da; /* Rojo claro */
     transition: background-color 0.3s;
+}
+/* --- Estilos para la tabla LM --- */
+.lm-table .editable-cell[contenteditable="true"]:hover {
+    background-color: #f0f8ff;
+    cursor: cell;
+}
+
+/* Clases de Feedback de Guardado */
+.lm-table .editable-cell.saving { background-color: #fffbe6; transition: background-color 0.3s; }
+.lm-table .editable-cell.saved-success { background-color: #d4edda; transition: background-color 0.3s; }
+.lm-table .editable-cell.saved-error { background-color: #f8d7da; transition: background-color 0.3s; }
+
+/* === NUEVAS CLASES PARA ESTILO DE CELDAS === */
+.cell-ok { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; }
+.cell-warning { background-color: #ffeb9c !important; color: #9c6500 !important; }
+.cell-danger-text { color: #ff0000 !important; font-weight: bold; }
+
+/* === NUEVA CLASE PARA REORDENAR === */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #add8e6;
+}
+.sortable-handle {
+    cursor: move; /* El cursor se convierte en una mano para indicar que se puede mover */
+}
+/* === ESTILOS PARA EL MENÚ CONTEXTUAL DE CELDAS (ESTILO EXCEL) === */
+#cell-context-menu {
+    position: absolute;
+    display: none;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    border-radius: 5px;
+    padding: 10px;
+    z-index: 1000;
+    width: 250px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Pestañas para Fondo/Texto */
+.context-menu-tabs {
+    display: flex;
+    border-bottom: 1px solid #dee2e6;
+    margin-bottom: 10px;
+}
+.context-menu-tab {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #495057;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -1px;
+}
+.context-menu-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+/* Contenedores de paletas */
+.context-menu-palette-content { display: none; }
+.context-menu-palette-content.active { display: block; }
+.context-menu-section-title {
+    font-weight: bold; font-size: 0.8rem; color: #6c757d;
+    margin-top: 10px; margin-bottom: 8px;
+}
+
+/* --- CORRECCIÓN CLAVE AQUÍ --- */
+
+/* Paleta general */
+.color-palette {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+}
+
+/* Colores del tema (mantiene la estructura de columnas) */
+.theme-colors-container { display: flex; justify-content: space-between; gap: 4px; }
+.color-column { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+
+/* Cuadro de color individual */
+.color-box {
+    width: 100%;
+    height: 0;
+    padding-bottom: 100%;
+    position: relative;
+    border-radius: 2px;
+    cursor: pointer;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    transition: transform 0.1s ease;
+    background-color: var(--color);
+}
+/* Le damos el color de fondo a través de una variable en línea */
+.color-box {
+    background-color: var(--bg-color);
+}
+.color-box:hover { transform: scale(1.15); z-index: 10; border-color: #007bff; }
+
+/* Opciones inferiores del menú */
+#cell-context-menu .context-divider { border-top: 1px solid #e9ecef; margin: 10px 0; }
+#cell-context-menu .more-colors-btn, #cell-context-menu .reset-style-btn {
+    display: block; width: 100%; border: none; background: none;
+    padding: 8px; border-radius: 5px; cursor: pointer;
+    font-weight: 500; text-align: left;
+}
+#cell-context-menu .more-colors-btn:hover, #cell-context-menu .reset-style-btn:hover { background-color: #e9ecef; }
+#cell-context-menu .reset-style-btn { color: #d9534f; margin-top: 4px; }
+
+/* ==========================================================================
+   ESTILOS PARA EL BOTÓN DE GUARDADO FLOTANTE EN MÓVIL
+   ========================================================================== */
+
+/* Estilos por defecto para el contenedor del botón (vista de escritorio) */
+.save-button-container {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+/* 
+  Cuando la pantalla es de 768px o menos (móviles en vertical),
+  aplicamos los siguientes estilos para hacerlo "pegajoso".
+*/
+@media (max-width: 768px) {
+    /* 
+      Añadimos un espacio en la parte inferior del contenido principal para que el
+      último elemento del formulario no quede oculto DETRÁS de la barra de guardado.
+      Este es un paso crucial.
+    */
+    main.container-fluid {
+        padding-bottom: 100px; /* Un poco más que la altura de la barra */
+    }
+
+    .save-button-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        
+        /* Estilos visuales para la barra */
+        background-color: rgba(255, 255, 255, 0.95);
+        border-top: 1px solid #dee2e6;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+        z-index: 1030; /* Asegura que esté por encima de otros elementos */
+        
+        /* Efecto moderno de "vidrio esmerilado" */
+        -webkit-backdrop-filter: blur(5px);
+        backdrop-filter: blur(5px);
+        
+        /* Reseteamos el padding superior que tenía en escritorio */
+        padding-top: 0.75rem; 
+    }
+
+    /* Hacemos que el botón ocupe todo el ancho de la barra para que sea fácil de presionar */
+    .save-button-container .btn {
+        width: 100%;
+        font-size: 1.1rem; /* Un poco más grande para móviles */
+    }
 }
