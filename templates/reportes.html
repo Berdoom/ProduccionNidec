@@ -1,109 +1,294 @@
 {% extends "layout.html" %}
 
 {% block title %}Reportes de Producción{% endblock %}
-{% block page_header %}Reportes de Producción{% endblock %}
+{% block page_header %}Análisis de Datos de Producción{% endblock %}
 
 {% block content %}
+<!-- SECCIÓN DE FILTROS DINÁMICOS -->
 <div class="content-section">
-    <form id="reportForm" method="GET" action="{{ url_for('reportes') }}" data-no-spinner="true">
-        <div class="form-row align-items-end">
-            <div class="form-group col-md-3">
-                <label for="group">Grupo:</label>
-                <select id="group" name="group" class="form-control" {% if not is_admin %}disabled{% endif %}>
-                    <option value="IHP" {% if group == 'IHP' %}selected{% endif %}>IHP</option>
-                    <option value="FHP" {% if group == 'FHP' %}selected{% endif %}>FHP</option>
-                </select>
+    <form id="reportForm" method="GET" action="{{ url_for('reportes') }}">
+        <div class="row align-items-end">
+            <!-- Columna para Selectores Principales -->
+            <div class="col-lg-5 col-md-12">
+                <div class="form-row">
+                    <div id="group_selector_container" class="form-group col-sm-6">
+                        <label for="group">Grupo:</label>
+                        <select id="group" name="group" class="form-control" {% if not is_admin %}disabled{% endif %}>
+                            <option value="IHP" {% if group == 'IHP' %}selected{% endif %}>IHP</option>
+                            <option value="FHP" {% if group == 'FHP' %}selected{% endif %}>FHP</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-sm-6">
+                        <label for="report_type">Tipo de Análisis:</label>
+                        <select id="report_type" name="report_type" class="form-control">
+                            <option value="single_day" {% if report_type == 'single_day' %}selected{% endif %}>Análisis de un Día</option>
+                            <option value="date_range" {% if report_type == 'date_range' %}selected{% endif %}>Rendimiento de Grupo</option>
+                            <!-- NUEVA OPCIÓN -->
+                            <option value="group_comparison" {% if report_type == 'group_comparison' %}selected{% endif %}>Comparar Grupos (IHP vs FHP)</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            <div class="form-group col-md-2">
-                <label for="year">Año:</label>
-                <select id="year" name="year" class="form-control">
-                    {% for y in range(2024, 2031) %}
-                    <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
-                    {% endfor %}
-                </select>
+
+            <!-- Columna para los Inputs de Fecha -->
+            <div class="col-lg-5 col-md-12">
+                <div id="single_day_inputs" class="form-group">
+                    <label for="single_date">Seleccionar Día:</label>
+                    <input type="date" class="form-control" id="single_date" name="start_date" value="{{ start_date }}">
+                </div>
+                <div id="date_range_inputs" class="form-row" style="display:none;">
+                    <div class="form-group col-sm-6"><label for="range_start_date">Desde:</label><input type="date" class="form-control" id="range_start_date" name="start_date_range" value="{{ start_date }}"></div>
+                    <div class="form-group col-sm-6"><label for="range_end_date">Hasta:</label><input type="date" class="form-control" id="range_end_date" name="end_date" value="{{ end_date }}"></div>
+                </div>
             </div>
-            <div class="form-group col-md-3">
-                <label for="month">Mes:</label>
-                <select id="month" name="month" class="form-control">
-                    {% for m in range(1, 13) %}
-                    <option value="{{ m }}" {% if m == selected_month %}selected{% endif %}>{{ m | month_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group col-md-auto">
-                <button type="submit" class="btn btn-nidec-style">
-                    <i class="fas fa-chart-line"></i> Generar Reporte
-                </button>
+
+            <div class="col-lg-2 col-md-12 mt-3 mt-lg-0">
+                <div class="form-group"><button type="submit" class="btn btn-nidec-style btn-block"><i class="fas fa-chart-line"></i> Generar</button></div>
             </div>
         </div>
     </form>
 </div>
 
+<!-- ============================================== -->
+<!-- === CONTENIDO CONDICIONAL DEL REPORTE === -->
+<!-- ============================================== -->
+
+<!-- SECCIÓN PARA ANÁLISIS DE UN SOLO DÍA -->
+{% if report_type == 'single_day' and weekly_data and monthly_data %}
+<h3 class="mt-5 mb-3">Análisis para el día: <strong>{{ start_date }}</strong></h3>
 <div class="row">
-    <!-- Gráfica de Eficiencia Mensual -->
     <div class="col-lg-6 mb-4">
         <div class="content-section h-100">
-            <h4 class="mb-3">Tendencia de Eficiencia Mensual</h4>
-            {% if efficiency_data.labels %}
-            <div style="height: 400px; position: relative;"><canvas id="efficiencyChart"></canvas></div>
-            {% else %}
-            <div class="alert alert-warning">No hay suficientes datos para mostrar la tendencia de eficiencia.</div>
-            {% endif %}
+            <h4 class="mb-3">Contexto Semanal</h4>
+            <div style="height: 350px;"><canvas id="weeklyChart"></canvas></div>
         </div>
     </div>
-    <!-- Gráfica de Producción por Área -->
     <div class="col-lg-6 mb-4">
         <div class="content-section h-100">
-            <h4 class="mb-3">Producción Total por Área</h4>
-             {% if areas_data.labels %}
-            <div style="height: 400px; position: relative;"><canvas id="areasChart"></canvas></div>
-             {% else %}
-            <div class="alert alert-warning">No hay datos de producción por área para este mes.</div>
-            {% endif %}
+            <h4 class="mb-3">Contexto Mensual</h4>
+            <div style="height: 350px;"><canvas id="monthlyChart"></canvas></div>
         </div>
     </div>
 </div>
+{% endif %}
+
+
+<!-- SECCIÓN PARA RENDIMIENTO DE GRUPO -->
+{% if report_type == 'date_range' and range_data %}
+<h3 class="mt-5 mb-3">Análisis del rango: <strong>{{ start_date }}</strong> al <strong>{{ end_date }}</strong></h3>
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="content-section">
+            <h4 class="mb-3">Gráfico de Pronóstico vs. Producido</h4>
+            <div style="height: 400px;"><canvas id="rangeChart"></canvas></div>
+        </div>
+    </div>
+    <div class="col-12">
+        <div class="content-section">
+            <h4 class="mb-3">Tabla de Datos Detallados</h4>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th class="text-right">Pronóstico</th>
+                            <th class="text-right">Producido</th>
+                            <th class="text-right">Diferencia</th>
+                            <th style="width: 25%;">Eficiencia</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in range_data.table %}
+                        <tr>
+                            <td>{{ row.fecha }}</td>
+                            <td class="text-right">{{ "{:,.0f}".format(row.pronostico) }}</td>
+                            <td class="text-right">{{ "{:,.0f}".format(row.producido) }}</td>
+                            <td class="text-right font-weight-bold {% if row.producido < row.pronostico %}text-danger{% else %}text-success{% endif %}">
+                                {{ "{:+,}".format(row.producido - row.pronostico) }}
+                            </td>
+                            <td>
+                                {% set eficiencia = row.eficiencia | round(1) %}
+                                <div class="progress" style="height: 20px; font-size: 0.8rem;">
+                                    <div class="progress-bar 
+                                        {% if eficiencia < 80 %}bg-danger
+                                        {% elif eficiencia < 95 %}bg-warning
+                                        {% else %}bg-success
+                                        {% endif %}" 
+                                        role="progressbar" style="width: {{ eficiencia }}%;" 
+                                        aria-valuenow="{{ eficiencia }}">
+                                        <strong>{{ eficiencia }}%</strong>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- NUEVA SECCIÓN PARA COMPARACIÓN DE GRUPOS -->
+{% if report_type == 'group_comparison' and comparison_data %}
+<h3 class="mt-5 mb-3">Comparación IHP vs. FHP del <strong>{{ start_date }}</strong> al <strong>{{ end_date }}</strong></h3>
+<div class="row">
+    <!-- Gráfico de Líneas -->
+    <div class="col-12 mb-4">
+        <div class="content-section">
+            <h4 class="mb-3">Tendencia de Producción Diaria</h4>
+            <div style="height: 400px;"><canvas id="comparisonChart"></canvas></div>
+        </div>
+    </div>
+    <!-- Tabla de Resumen -->
+    <div class="col-12">
+        <div class="content-section">
+            <h4 class="mb-3">Totales del Periodo</h4>
+            <table class="table text-center">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Grupo</th>
+                        <th>Producción Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="font-weight-bold">IHP</td>
+                        <td><h4>{{ "{:,.0f}".format(comparison_data.summary.total_ihp) }}</h4></td>
+                    </tr>
+                    <tr>
+                        <td class="font-weight-bold">FHP</td>
+                        <td><h4>{{ "{:,.0f}".format(comparison_data.summary.total_fhp) }}</h4></td>
+                    </tr>
+                    <tr class="table-info">
+                        <td class="font-weight-bold">Diferencia (FHP - IHP)</td>
+                        <td><h4 class="font-weight-bold">{{ "{:,.0f}".format(comparison_data.summary.total_fhp - comparison_data.summary.total_ihp) }}</h4></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
+
 
 {% block scripts %}
 <script>
+// --- LÓGICA PARA CONTROLAR LOS FILTROS ---
 document.addEventListener('DOMContentLoaded', function() {
-    // 1. Gráfica de Tendencia de Eficiencia
-    const efficiencyCtx = document.getElementById('efficiencyChart');
-    if (efficiencyCtx) {
-        const efficiencyData = {{ efficiency_data | tojson }};
-        new Chart(efficiencyCtx, {
-            type: 'line',
+    const reportTypeSelect = document.getElementById('report_type');
+    const groupSelectorContainer = document.getElementById('group_selector_container');
+    const singleDayInputs = document.getElementById('single_day_inputs');
+    const dateRangeInputs = document.getElementById('date_range_inputs');
+    const singleDateField = document.getElementById('single_date');
+    const rangeStartDateField = document.getElementById('range_start_date');
+
+    function toggleInputs() {
+        const selectedType = reportTypeSelect.value;
+        
+        // Ocultar/mostrar el selector de grupo
+        groupSelectorContainer.style.display = (selectedType === 'group_comparison') ? 'none' : 'block';
+
+        if (selectedType === 'single_day') {
+            singleDayInputs.style.display = 'block';
+            dateRangeInputs.style.display = 'none';
+            // Asegura que los campos deshabilitados no se envíen
+            rangeStartDateField.name = 'start_date_range';
+            singleDateField.name = 'start_date';
+        } else { // Para 'date_range' y 'group_comparison'
+            singleDayInputs.style.display = 'none';
+            dateRangeInputs.style.display = 'flex'; // Usamos flex para que se alinee bien
+            // Cambia el nombre del campo activo para que sea recogido por Flask
+            rangeStartDateField.name = 'start_date';
+            singleDateField.name = 'start_date_single';
+        }
+    }
+    
+    reportTypeSelect.addEventListener('change', toggleInputs);
+    // Ejecutar al cargar la página para establecer el estado inicial correcto
+    toggleInputs();
+
+
+    // --- LÓGICA PARA INICIALIZAR GRÁFICOS ---
+    // 1. Gráfico Semanal
+    const weeklyData = {{ weekly_data | tojson }};
+    const weeklyCtx = document.getElementById('weeklyChart');
+    if (weeklyData && weeklyCtx) {
+        new Chart(weeklyCtx, {
+            type: 'bar',
             data: {
-                labels: efficiencyData.labels,
-                datasets: [{
-                    label: 'Eficiencia (%)',
-                    data: efficiencyData.data,
-                    borderColor: 'rgb(36, 184, 23)',
-                    backgroundColor: 'rgba(36, 184, 23, 0.1)',
-                    fill: true,
-                    tension: 0.1
-                }]
+                labels: weeklyData.labels,
+                datasets: [
+                    { label: 'Producido', data: weeklyData.producido, backgroundColor: 'rgba(36, 184, 23, 0.8)', order: 2 },
+                    { label: 'Pronóstico', data: weeklyData.pronostico, type: 'line', borderColor: 'rgba(255, 99, 132, 1)', fill: false, order: 1 }
+                ]
             },
-            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 110 } } }
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
         });
     }
 
-    // 2. Gráfica Comparativa de Áreas
-    const areasCtx = document.getElementById('areasChart');
-    if (areasCtx) {
-        const areasData = {{ areas_data | tojson }};
-        new Chart(areasCtx, {
-            type: 'bar',
+    // 2. Gráfico Mensual
+    const monthlyData = {{ monthly_data | tojson }};
+    const monthlyCtx = document.getElementById('monthlyChart');
+    if (monthlyData && monthlyCtx) {
+        new Chart(monthlyCtx, {
+            type: 'line',
             data: {
-                labels: areasData.labels,
-                datasets: [{
-                    label: 'Unidades Producidas',
-                    data: areasData.data,
-                    backgroundColor: 'rgba(0, 178, 169, 0.8)'
-                }]
+                labels: monthlyData.labels,
+                datasets: [
+                    { label: 'Producido', data: monthlyData.producido, borderColor: 'rgb(36, 184, 23)', tension: 0.1 },
+                    { label: 'Pronóstico', data: monthlyData.pronostico, borderColor: 'rgb(255, 99, 132)', tension: 0.1, borderDash: [5, 5] }
+                ]
             },
             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+        });
+    }
+    
+    // 3. Gráfico de Rango
+    const rangeData = {{ range_data.chart | tojson if range_data else 'null' }};
+    const rangeCtx = document.getElementById('rangeChart');
+    if (rangeData && rangeCtx) {
+        new Chart(rangeCtx, {
+            type: 'bar',
+            data: {
+                labels: rangeData.labels,
+                datasets: [
+                    { label: 'Producido', data: rangeData.producido, backgroundColor: 'rgba(36, 184, 23, 0.8)' },
+                    { label: 'Pronóstico', data: rangeData.pronostico, backgroundColor: 'rgba(201, 203, 207, 0.8)' },
+                    { label: 'Eficiencia (%)', data: rangeData.eficiencia, type: 'line', borderColor: '#ffc107', yAxisID: 'y1', tension: 0.1 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: false },
+                    y: { type: 'linear', display: true, position: 'left', stacked: false, title: { display: true, text: 'Unidades' } },
+                    y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Eficiencia (%)' }, suggestedMax: 110 }
+                }
+            }
+        });
+    }
+
+    // 4. NUEVO Gráfico de Comparación
+    const comparisonData = {{ comparison_data.chart | tojson if comparison_data else 'null' }};
+    const comparisonCtx = document.getElementById('comparisonChart');
+    if (comparisonData && comparisonCtx) {
+        new Chart(comparisonCtx, {
+            type: 'line',
+            data: {
+                labels: comparisonData.labels,
+                datasets: [
+                    { label: 'IHP', data: comparisonData.ihp_data, borderColor: '#007bff', backgroundColor: 'rgba(0, 123, 255, 0.1)', fill: true, tension: 0.1 },
+                    { label: 'FHP', data: comparisonData.fhp_data, borderColor: '#28a745', backgroundColor: 'rgba(40, 167, 69, 0.1)', fill: true, tension: 0.1 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Unidades Producidas' } } }
+            }
         });
     }
 });

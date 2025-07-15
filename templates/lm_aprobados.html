@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+
+{% block title %}Programa LM - Aprobados{% endblock %}
+{% block page_header %}Seguimiento de Órdenes de Trabajo (Aprobados){% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0">Listado de Órdenes Completadas</h4>
+        <a href="{{ url_for('programa_lm') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left mr-1"></i> Volver a Pendientes
+        </a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover lm-table">
+            <thead class="thead-light">
+                <tr>
+                    <th style="min-width: 120px;">Acciones</th>
+                    <th>WIP order</th>
+                    <th>Item</th>
+                    <th>QTY</th>
+                    {% for columna in columnas %}
+                        <th>{{ columna.nombre }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for orden in ordenes %}
+                <tr class="table-success"> <!-- Fila coloreada para indicar que está completada -->
+                    <td class="text-center">
+                        <form action="{{ url_for('toggle_status_lm', orden_id=orden.id) }}" method="POST" class="d-inline">
+                             <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                             <button type="submit" class="btn btn-sm btn-outline-warning" title="Devolver a Pendientes">
+                                <i class="fas fa-undo"></i>
+                             </button>
+                        </form>
+                    </td>
+                    <td>{{ orden.wip_order }}</td>
+                    <td>{{ orden.item or '' }}</td>
+                    <td>{{ orden.qty }}</td>
+                    {% for columna in columnas %}
+                        {% set celda_obj = datos.get(orden.id, {}).get(columna.id) %}
+                        {% set estilos_str = '' %}
+                        {% if celda_obj and celda_obj.estilos_css %}
+                            {% set estilos_dict = celda_obj.estilos_css | fromjson %}
+                            {% set style_parts = [] %}
+                            {% if estilos_dict.backgroundColor %}{% set _ = style_parts.append('background-color:' ~ estilos_dict.backgroundColor) %}{% endif %}
+                            {% if estilos_dict.color %}{% set _ = style_parts.append('color:' ~ estilos_dict.color) %}{% endif %}
+                            {% set estilos_str = style_parts|join(';') %}
+                        {% endif %}
+                        <td style="{{ estilos_str }}">
+                            {{- celda_obj.valor if celda_obj else '' -}}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% else %}
+                <tr><td colspan="{{ 4 + columnas|length }}" class="text-center text-muted py-4">No hay órdenes completadas para mostrar.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
