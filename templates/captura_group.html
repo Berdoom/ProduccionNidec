@@ -13,7 +13,6 @@
         <!-- Selector de Fecha y Acciones Superiores -->
         <div class="form-row align-items-center mb-4">
             <div class="col-auto"><label for="fecha" class="col-form-label font-weight-bold">Fecha:</label></div>
-            <!-- CAMBIO: El onchange ahora redirige directamente a la URL con la nueva fecha. Es más simple y robusto. -->
             <div class="col-sm-4">
                 <input type="date" class="form-control" id="fecha" name="fecha" value="{{ selected_date | e }}" 
                        onchange="window.location.href = '{{ url_for('captura', group=group_name.lower()) }}?fecha=' + this.value;">
@@ -94,9 +93,10 @@
         </div>
         
         <!-- =================================== -->
-        <!--     VISTA PARA MÓVIL (MEJORADA)     -->
+        <!--     VISTA PARA MÓVIL (CORREGIDA)    -->
         <!-- =================================== -->
-        <div class="mobile-only-view">
+        <!-- Se cambió la clase de "mobile-only-view" a "mobile-only-container" -->
+        <div class="mobile-only-container">
             {% for area in areas if area != 'Output' %}
             {% set area_slug = area | slug %}
             <div class="mobile-capture-card" data-area-slug="{{ area_slug }}" data-area-name="{{ area }}">
