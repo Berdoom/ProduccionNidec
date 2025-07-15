@@ -1,7 +1,8 @@
 import os
 import sys
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_file, abort
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import calendar
 from werkzeug.security import generate_password_hash, check_password_hash
 import secrets
 import pandas as pd
@@ -9,8 +10,8 @@ import io
 from functools import wraps
 import locale
 from collections import Counter
-import calendar
 from sqlalchemy.orm import joinedload
+import json
 
 try:
     from zoneinfo import ZoneInfo
@@ -34,7 +35,7 @@ except locale.Error:
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "n1D3c$#pro")
-
+app.jinja_env.filters['fromjson'] = json.loads
 # ===============================================================
 # === CONFIGURACIÓN INICIAL Y CONTEXT PROCESSORS ===
 # ===============================================================
@@ -307,6 +308,20 @@ def get_detailed_performance_data(selected_date):
         flash(f"Error al generar datos detallados del dashboard: {e}", "danger")
     return performance_data
 
+def get_daily_summary(group, target_date):
+    try:
+        pronostico_areas = db_session.query(func.sum(Pronostico.valor_pronostico)).filter_by(grupo=group, fecha=target_date).scalar() or 0
+        pronostico_output = db_session.query(func.sum(OutputData.pronostico)).filter_by(grupo=group, fecha=target_date).scalar() or 0
+        producido_areas = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter_by(grupo=group, fecha=target_date).scalar() or 0
+        producido_output = db_session.query(func.sum(OutputData.output)).filter_by(grupo=group, fecha=target_date).scalar() or 0
+
+        total_pronostico = pronostico_areas + pronostico_output
+        total_producido = producido_areas + producido_output
+        eficiencia = (total_producido / total_pronostico * 100) if total_pronostico > 0 else 0
+        return {'pronostico': total_pronostico, 'producido': total_producido, 'eficiencia': eficiencia}
+    except Exception:
+        return {'pronostico': 0, 'producido': 0, 'eficiencia': 0}
+
 # ===============================================================
 # === RUTAS DE DASHBOARD Y PRODUCCIÓN ===
 # ===============================================================
@@ -387,35 +402,101 @@ def registro(group):
 @login_required
 @role_required(['ADMIN', 'IHP', 'FHP'])
 def reportes():
-    user_role, is_admin = session.get('role'), session.get('role') == 'ADMIN'
+    # --- Configuración Inicial ---
+    user_role = session.get('role'); is_admin = user_role == 'ADMIN'
     default_group = user_role if user_role in ['IHP', 'FHP'] else 'IHP'
+    
     group = request.args.get('group', default_group)
     if not is_admin: group = user_role
-    
-    today = now_mexico()
-    year, month = request.args.get('year', today.year, type=int), request.args.get('month', today.month, type=int)
-    efficiency_data, areas_data = {'labels': [], 'data': []}, {'labels': [], 'data': []}
-    
-    try:
-        num_days = calendar.monthrange(year, month)[1]
-        for day in range(1, num_days + 1):
-            date_str = f"{year}-{month:02d}-{day:02d}"
-            performance_day = get_group_performance(group, date_str)
-            eficiencia = performance_day.get('eficiencia', 0)
-            if eficiencia > 0: efficiency_data['labels'].append(f"{day}/{month}"); efficiency_data['data'].append(eficiencia)
-    except exc.SQLAlchemyError as e: flash(f"Error al calcular la tendencia de eficiencia: {e}", "danger")
-    
-    try:
-        start_of_month, end_of_month = datetime(year, month, 1).date(), (datetime(year, month, 1).replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-        areas_list = [area for area in (AREAS_IHP if group == 'IHP' else AREAS_FHP) if area != 'Output']
-        for area in areas_list:
-            produccion_area = db_session.query(func.sum(ProduccionCaptura.valor_producido)).filter(ProduccionCaptura.grupo == group, ProduccionCaptura.area == area, ProduccionCaptura.fecha.between(start_of_month, end_of_month)).scalar() or 0
-            if produccion_area > 0: areas_data['labels'].append(area); areas_data['data'].append(produccion_area)
-        output_mes = db_session.query(func.sum(OutputData.output)).filter(OutputData.grupo == group, OutputData.fecha.between(start_of_month, end_of_month)).scalar() or 0
-        if output_mes > 0: areas_data['labels'].append('Output'); areas_data['data'].append(output_mes)
-    except exc.SQLAlchemyError as e: flash(f"Error al calcular la comparación de áreas: {e}", "danger")
-    
-    return render_template('reportes.html', group=group, selected_year=year, selected_month=month, is_admin=is_admin, efficiency_data=efficiency_data, areas_data=areas_data)
+        
+    report_type = request.args.get('report_type', 'single_day')
+    today = get_business_date()
+
+    # --- Inicializar variables de datos ---
+    context = {
+        'group': group, 'is_admin': is_admin, 'report_type': report_type,
+        'start_date': today.strftime('%Y-%m-%d'), 'end_date': today.strftime('%Y-%m-%d'),
+        'weekly_data': None, 'monthly_data': None, 'range_data': None, 'comparison_data': None
+    }
+
+    # --- Lógica de Procesamiento de Datos ---
+    if report_type == 'single_day':
+        selected_date_str = request.args.get('start_date', today.strftime('%Y-%m-%d'))
+        context['start_date'] = selected_date_str
+        selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
+
+        start_of_week = selected_date - timedelta(days=selected_date.weekday())
+        week_labels = [(start_of_week + timedelta(days=i)).strftime('%a %d') for i in range(7)]
+        week_prod_data = [get_daily_summary(group, start_of_week + timedelta(days=i))['producido'] for i in range(7)]
+        week_pron_data = [get_daily_summary(group, start_of_week + timedelta(days=i))['pronostico'] for i in range(7)]
+        context['weekly_data'] = {'labels': week_labels, 'producido': week_prod_data, 'pronostico': week_pron_data}
+
+        days_in_month = calendar.monthrange(selected_date.year, selected_date.month)[1]
+        month_labels = [str(day) for day in range(1, days_in_month + 1)]
+        month_prod_data = [get_daily_summary(group, date(selected_date.year, selected_date.month, day))['producido'] for day in range(1, days_in_month + 1)]
+        month_pron_data = [get_daily_summary(group, date(selected_date.year, selected_date.month, day))['pronostico'] for day in range(1, days_in_month + 1)]
+        context['monthly_data'] = {'labels': month_labels, 'producido': month_prod_data, 'pronostico': month_pron_data}
+
+    elif report_type == 'date_range':
+        start_date_str = request.args.get('start_date', (today - timedelta(days=6)).strftime('%Y-%m-%d'))
+        end_date_str = request.args.get('end_date', today.strftime('%Y-%m-%d'))
+        context['start_date'] = start_date_str
+        context['end_date'] = end_date_str
+        
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        
+        range_labels, range_prod, range_pron, range_eff, table_rows = [], [], [], [], []
+        delta = end_date - start_date
+        
+        for i in range(delta.days + 1):
+            current_date = start_date + timedelta(days=i)
+            summary = get_daily_summary(group, current_date)
+            
+            range_labels.append(current_date.strftime('%d/%m/%Y'))
+            range_prod.append(summary['producido'])
+            range_pron.append(summary['pronostico'])
+            range_eff.append(round(summary['eficiencia'], 1))
+            table_rows.append({'fecha': current_date.strftime('%d/%m/%Y'), **summary})
+            
+        context['range_data'] = {
+            'chart': {'labels': range_labels, 'producido': range_prod, 'pronostico': range_pron, 'eficiencia': range_eff},
+            'table': table_rows
+        }
+
+    # --- NUEVA LÓGICA PARA COMPARAR GRUPOS ---
+    elif report_type == 'group_comparison':
+        start_date_str = request.args.get('start_date', (today - timedelta(days=6)).strftime('%Y-%m-%d'))
+        end_date_str = request.args.get('end_date', today.strftime('%Y-%m-%d'))
+        context['start_date'] = start_date_str
+        context['end_date'] = end_date_str
+        
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        
+        labels, ihp_prod_data, fhp_prod_data = [], [], []
+        total_ihp = 0
+        total_fhp = 0
+        
+        delta = end_date - start_date
+        for i in range(delta.days + 1):
+            current_date = start_date + timedelta(days=i)
+            labels.append(current_date.strftime('%d/%m'))
+            
+            summary_ihp = get_daily_summary('IHP', current_date)
+            ihp_prod_data.append(summary_ihp['producido'])
+            total_ihp += summary_ihp['producido']
+            
+            summary_fhp = get_daily_summary('FHP', current_date)
+            fhp_prod_data.append(summary_fhp['producido'])
+            total_fhp += summary_fhp['producido']
+            
+        context['comparison_data'] = {
+            'chart': {'labels': labels, 'ihp_data': ihp_prod_data, 'fhp_data': fhp_prod_data},
+            'summary': {'total_ihp': total_ihp, 'total_fhp': total_fhp}
+        }
+
+    return render_template('reportes.html', **context)
 
 @app.route('/captura/<group>', methods=['GET', 'POST'])
 @login_required
@@ -595,32 +676,144 @@ def export_excel(group):
 @login_required
 @role_required(['ADMIN', 'PROGRAMA_LM'])
 def programa_lm():
-    """
-    Renderiza la tabla principal del Programa LM, obteniendo todas las órdenes,
-    columnas y datos de celdas asociados.
-    """
     try:
-        # Carga las órdenes y, de forma eficiente, sus celdas asociadas de una sola vez
-        ordenes = db_session.query(OrdenLM).options(joinedload(OrdenLM.celdas)).order_by(OrdenLM.timestamp.desc()).all()
-        columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.nombre).all()
-        
-        # Estructura los datos de las celdas en un diccionario para un acceso rápido en la plantilla
-        # El formato es: { orden_id: { columna_id: valor_celda } }
-        datos_celdas = {
-            orden.id: {celda.columna_id: celda.valor for celda in orden.celdas}
-            for orden in ordenes
-        }
+        # Solo muestra las órdenes con estado 'Pendiente'
+        ordenes = db_session.query(OrdenLM).filter(OrdenLM.status == 'Pendiente').order_by(OrdenLM.timestamp.desc()).all()
+        columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
+        celdas = db_session.query(DatoCeldaLM).filter(
+            DatoCeldaLM.orden_id.in_([o.id for o in ordenes])
+        ).all()
+        datos_celdas = {}
+        for celda in celdas:
+            if celda.orden_id not in datos_celdas:
+                datos_celdas[celda.orden_id] = {}
+            datos_celdas[celda.orden_id][celda.columna_id] = celda
 
         return render_template(
-            'programa_lm.html', 
-            ordenes=ordenes, 
-            columnas=columnas, 
+            'programa_lm.html',
+            ordenes=ordenes,
+            columnas=columnas,
             datos=datos_celdas
         )
     except exc.SQLAlchemyError as e:
         flash(f"Error crítico al cargar el programa LM: {e}", "danger")
-        log_activity("Error DB Programa LM", str(e), "PROGRAMA_LM", "Sistema", "Critical")
         return redirect(url_for('dashboard'))
+
+# --- NUEVA RUTA PARA ÓRDENES APROBADAS ---
+@app.route('/programa_lm/aprobados')
+@login_required
+@role_required(['ADMIN', 'PROGRAMA_LM'])
+def programa_lm_aprobados():
+    try:
+        # Solo muestra las órdenes con estado 'Completada'
+        ordenes_completadas = db_session.query(OrdenLM).filter(OrdenLM.status == 'Completada').order_by(OrdenLM.timestamp.desc()).all()
+        columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
+        celdas = db_session.query(DatoCeldaLM).filter(
+            DatoCeldaLM.orden_id.in_([o.id for o in ordenes_completadas])
+        ).all()
+        datos_celdas = {}
+        for celda in celdas:
+            if celda.orden_id not in datos_celdas:
+                datos_celdas[celda.orden_id] = {}
+            datos_celdas[celda.orden_id][celda.columna_id] = celda
+
+        return render_template(
+            'lm_aprobados.html',
+            ordenes=ordenes_completadas,
+            columnas=columnas,
+            datos=datos_celdas
+        )
+    except exc.SQLAlchemyError as e:
+        flash(f"Error al cargar las órdenes aprobadas: {e}", "danger")
+        return redirect(url_for('programa_lm'))
+
+# --- NUEVA RUTA PARA CAMBIAR EL ESTADO ---
+@app.route('/programa_lm/toggle_status/<int:orden_id>', methods=['POST'])
+@login_required
+@role_required(['ADMIN', 'PROGRAMA_LM'])
+@csrf_required
+def toggle_status_lm(orden_id):
+    try:
+        orden = db_session.get(OrdenLM, orden_id)
+        if orden:
+            # Cambia el estado: si es 'Pendiente' lo pone 'Completada', y viceversa.
+            if orden.status == 'Pendiente':
+                orden.status = 'Completada'
+                flash(f"Orden '{orden.wip_order}' marcada como completada.", "success")
+            else:
+                orden.status = 'Pendiente'
+                flash(f"Orden '{orden.wip_order}' devuelta a pendientes.", "info")
+            db_session.commit()
+            log_activity("Cambio Estado Orden LM", f"Orden ID {orden.id} a estado '{orden.status}'", "PROGRAMA_LM", "Datos", "Info")
+        else:
+            flash("La orden no fue encontrada.", "danger")
+    except Exception as e:
+        db_session.rollback()
+        flash(f"Error al cambiar el estado de la orden: {e}", "danger")
+    return redirect(request.referrer or url_for('programa_lm'))
+
+@app.route('/programa_lm/reorder_columns', methods=['POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def reorder_columns():
+    try:
+        data = request.json
+        ordered_ids = data.get('ordered_ids', [])
+        for index, col_id_str in enumerate(ordered_ids):
+            try:
+                col_id = int(col_id_str)
+            except (ValueError, TypeError):
+                print(f"ID de columna inválido encontrado y omitido: {col_id_str}")
+                continue
+            columna = db_session.get(ColumnaLM, col_id)
+            if columna:
+                columna.orden = index
+        db_session.commit()
+        log_activity("Reordenar Columnas LM", f"Nuevo orden guardado.", "ADMIN", "Datos", "Info")
+        return jsonify({'status': 'success', 'message': 'Orden de columnas guardado.'})
+    except Exception as e:
+        db_session.rollback()
+        print(f"Error al reordenar columnas: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/programa_lm/edit_row/<int:orden_id>', methods=['POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def edit_row_lm(orden_id):
+    """
+    Actualiza los datos base de una orden de trabajo.
+    """
+    try:
+        orden = db_session.query(OrdenLM).get(orden_id)
+        if not orden:
+            flash("La orden que intentas editar no existe.", "danger")
+            return redirect(url_for('programa_lm'))
+
+        new_wip = request.form.get('wip_order')
+        new_item = request.form.get('item')
+        new_qty = request.form.get('qty')
+        
+        # Validar si el nuevo WIP order ya existe y no es el de la orden actual
+        existing_order = db_session.query(OrdenLM).filter(OrdenLM.wip_order == new_wip).first()
+        if existing_order and existing_order.id != orden_id:
+            flash(f"El WIP Order '{new_wip}' ya pertenece a otra orden.", "danger")
+            return redirect(url_for('programa_lm'))
+            
+        orden.wip_order = new_wip
+        orden.item = new_item
+        orden.qty = int(new_qty)
+        
+        db_session.commit()
+        log_activity("Edición Fila LM", f"Orden WIP '{new_wip}' (ID: {orden_id}) actualizada.", "ADMIN", "Datos", "Info")
+        flash("Orden actualizada correctamente.", "success")
+        
+    except Exception as e:
+        db_session.rollback()
+        flash(f"Error al editar la orden: {e}", "danger")
+    
+    return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/update_cell', methods=['POST'])
 @login_required
@@ -628,22 +821,45 @@ def programa_lm():
 def update_cell_lm():
     try:
         data = request.json
-        orden_id, columna_id, valor = int(data.get('orden_id')), int(data.get('columna_id')), data.get('valor', '').strip()
-        columna = db_session.query(ColumnaLM).get(columna_id)
-        if not columna: return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
+        orden_id = int(data.get('orden_id'))
+        columna_id = int(data.get('columna_id'))
+        valor = data.get('valor', None)
+        estilos_dict = data.get('estilos_css', None)
+
+        columna = db_session.get(ColumnaLM, columna_id)
+        if not columna:
+            return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
         if session['role'] != 'ADMIN' and not columna.editable_por_lm:
-            log_activity("Acceso Denegado", f"Intento de editar celda LM protegida. Orden ID: {orden_id}, Columna: {columna.nombre}", "PROGRAMA_LM", "Seguridad", "Warning")
             return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
+
         celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
+
+        # Crear solo si hay algo que guardar
+        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
+            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id)
+            db_session.add(celda)
+
         if celda:
-            if not valor: db_session.delete(celda)
-            else: celda.valor = valor
-        elif valor: db_session.add(DatoCeldaLM(orden_id=orden_id, columna_id=columna_id, valor=valor))
+            if valor is not None:
+                celda.valor = valor.strip()
+            if estilos_dict is not None:
+                celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
+
+            # Limpieza: eliminar si queda vacía
+            if not celda.valor and not celda.estilos_css:
+                db_session.delete(celda)
+                log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}", "PROGRAMA_LM", "Datos", "Info")
+            else:
+                log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'", "PROGRAMA_LM", "Datos", "Info")
+
         db_session.commit()
-        log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Columna: {columna.nombre}, Valor: '{valor}'", "PROGRAMA_LM", "Datos", "Info")
         return jsonify({'status': 'success', 'message': 'Celda actualizada'})
+
     except Exception as e:
-        db_session.rollback(); print(f"Error al actualizar celda: {e}"); return jsonify({'status': 'error', 'message': str(e)}), 500
+        db_session.rollback()
+        print(f"Error al actualizar celda: {e}")
+        log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error", "Critical")
+        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
 
 @app.route('/programa_lm/add_row', methods=['POST'])
 @login_required
@@ -672,23 +888,43 @@ def add_column_lm():
         log_activity("Creación Columna LM", f"Nueva columna creada: {nombre_columna}", "ADMIN", "Datos", "Info")
         flash("Nueva columna agregada exitosamente.", "success")
     return redirect(url_for('programa_lm'))
+
+@app.route('/programa_lm/delete_row/<int:orden_id>', methods=['POST'])
+@login_required
+@role_required(['ADMIN'])
+@csrf_required
+def delete_row_lm(orden_id):
+    """
+    Elimina una orden de trabajo completa y todos sus datos de celda asociados.
+    """
+    try:
+        orden = db_session.query(OrdenLM).get(orden_id)
+        if orden:
+            wip_order = orden.wip_order
+            # Gracias a cascade='all, delete-orphan' en el modelo,
+            # todos los DatoCeldaLM asociados se borrarán automáticamente.
+            db_session.delete(orden)
+            db_session.commit()
+            log_activity("Eliminación Fila LM", f"Orden WIP '{wip_order}' (ID: {orden_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
+            flash(f"La orden '{wip_order}' ha sido eliminada.", "success")
+        else:
+            flash("La orden que intentas eliminar no existe.", "danger")
+    except Exception as e:
+        db_session.rollback()
+        flash(f"Error al eliminar la orden: {e}", "danger")
+        
+    return redirect(url_for('programa_lm'))
+
 @app.route('/programa_lm/delete_column/<int:columna_id>', methods=['POST'])
 @login_required
 @role_required(['ADMIN'])
 @csrf_required
 def delete_column_lm(columna_id):
-    """
-    Elimina una columna completa del Programa LM y todos sus datos asociados.
-    Solo accesible para Administradores.
-    """
     try:
-        columna_a_eliminar = db_session.query(ColumnaLM).get(columna_id)
+        columna_a_eliminar = db_session.get(ColumnaLM, columna_id)
         
         if columna_a_eliminar:
             nombre_columna = columna_a_eliminar.nombre
-            
-            # Gracias al 'cascade' en el modelo, al borrar la columna,
-            # SQLAlchemy también borrará todos los DatoCeldaLM asociados.
             db_session.delete(columna_a_eliminar)
             db_session.commit()
             
@@ -703,6 +939,7 @@ def delete_column_lm(columna_id):
         log_activity("Error Eliminación Columna LM", f"Error al intentar borrar columna ID {columna_id}: {e}", "ADMIN", "Error", "Critical")
 
     return redirect(url_for('programa_lm'))
+
 
 @app.route('/centro_acciones')
 @login_required
