@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestionar Permisos de Rol{% endblock %}
+{% block page_header %}Gestionar Permisos para el Rol: {{ rol.nombre }}{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <p class="text-muted">Selecciona los permisos que tendrán los usuarios con el rol <strong>{{ rol.nombre }}</strong>.</p>
+        
+        {% if rol.nombre == 'ADMIN' %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle mr-2"></i>Los permisos del rol <strong>ADMIN</strong> no son editables para garantizar la estabilidad y seguridad del sistema. Este rol siempre tiene acceso a todo.
+        </div>
+        {% endif %}
+
+        <div class="row">
+            {% for permission in all_permissions %}
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="form-group form-check">
+                    <input type="checkbox" class="form-check-input" 
+                           id="perm_{{ permission.id }}" 
+                           name="permissions" 
+                           value="{{ permission.id }}" 
+                           {% if permission in rol.permissions %}checked{% endif %}
+                           {% if rol.nombre == 'ADMIN' %}disabled{% endif %}>
+                    <label class="form-check-label" for="perm_{{ permission.id }}">
+                        <strong>{{ permission.name }}</strong>
+                        <br>
+                        <small class="text-muted">{{ permission.description }}</small>
+                    </label>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <hr>
+        <div class="text-right">
+            <a href="{{ url_for('manage_roles') }}" class="btn btn-secondary">Volver a Roles</a>
+            {% if rol.nombre != 'ADMIN' %}
+            <button type="submit" class="btn btn-nidec-style">
+                <i class="fas fa-save"></i> Guardar Permisos
+            </button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

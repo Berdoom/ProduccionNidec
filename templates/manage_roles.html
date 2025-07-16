@@ -13,7 +13,7 @@
                 <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
                 <div class="form-group">
                     <label for="nombre" class="font-weight-bold">Nombre del Rol:</label>
-                    <input type="text" class="form-control" id="nombre" name="nombre" required placeholder="Ej: PROGRAMA_LM">
+                    <input type="text" class="form-control" id="nombre" name="nombre" required placeholder="Ej: SUPERVISOR">
                     <small class="form-text text-muted">El nombre debe estar en mayúsculas y sin espacios (use guion bajo). Ej: MI_NUEVO_ROL</small>
                 </div>
                 <button type="submit" class="btn btn-nidec-style btn-block">Crear Rol</button>
@@ -42,13 +42,16 @@
                             <td><strong>{{ rol.nombre }}</strong></td>
                             <td>{{ rol.usuarios | length }}</td>
                             <td>
-                                {% if rol.nombre not in ['ADMIN', 'IHP', 'FHP'] %}
+                                <a href="{{ url_for('manage_permissions', role_id=rol.id) }}" class="btn btn-sm btn-info" title="Gestionar Permisos">
+                                    <i class="fas fa-shield-alt"></i> Permisos
+                                </a>
+                                {% if rol.nombre not in ['ADMIN', 'IHP', 'FHP', 'PROGRAMA_LM'] %}
                                     <form action="{{ url_for('delete_role', role_id=rol.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este rol?');" class="d-inline">
                                         <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
-                                        <button type="submit" class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> Eliminar</button>
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Eliminar Rol"><i class="fas fa-trash-alt"></i></button>
                                     </form>
                                 {% else %}
-                                    <small class="text-muted">(Rol del sistema)</small>
+                                    <small class="text-muted font-italic ml-2">(Rol de sistema)</small>
                                 {% endif %}
                             </td>
                         </tr>
