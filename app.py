@@ -602,125 +602,62 @@ def export_excel(group):
     return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=f'produccion_{group_upper}_{selected_date_str}.xlsx')
 
 # ===============================================================
-# === RUTAS PARA PROGRAMA LM, GESTIÓN Y ACCIONES ===
+# === RUTAS PROGRAMA LM (SECCIÓN EN MANTENIMIENTO) ===
 # ===============================================================
 
+# La ruta principal ahora muestra la página de mantenimiento.
 @app.route('/programa_lm')
 @login_required
 @permission_required('programa_lm.view')
 def programa_lm():
-    try:
-        ordenes = db_session.query(OrdenLM).filter(OrdenLM.status == 'Pendiente').order_by(OrdenLM.timestamp.desc()).all()
-        columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
-        celdas = db_session.query(DatoCeldaLM).filter(DatoCeldaLM.orden_id.in_([o.id for o in ordenes])).all()
-        datos_celdas = { (c.orden_id, c.columna_id): c for c in celdas }
-        return render_template('programa_lm.html', ordenes=ordenes, columnas=columnas, datos=datos_celdas)
-    except exc.SQLAlchemyError as e:
-        flash(f"Error crítico al cargar el programa LM: {e}", "danger"); return redirect(url_for('dashboard'))
+    return render_template('maintenance.html')
 
+# Todas las sub-rutas y acciones redirigen a la página principal de mantenimiento.
 @app.route('/programa_lm/aprobados')
 @login_required
 @permission_required('programa_lm.view')
 def programa_lm_aprobados():
-    try:
-        ordenes = db_session.query(OrdenLM).filter(OrdenLM.status == 'Completada').order_by(OrdenLM.timestamp.desc()).all()
-        columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
-        celdas = db_session.query(DatoCeldaLM).filter(DatoCeldaLM.orden_id.in_([o.id for o in ordenes])).all()
-        datos_celdas = { (c.orden_id, c.columna_id): c for c in celdas }
-        return render_template('lm_aprobados.html', ordenes=ordenes, columnas=columnas, datos=datos_celdas)
-    except exc.SQLAlchemyError as e:
-        flash(f"Error al cargar las órdenes aprobadas: {e}", "danger"); return redirect(url_for('programa_lm'))
+    flash("Esta sección se encuentra actualmente en mantenimiento.", "warning")
+    return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/toggle_status/<int:orden_id>', methods=['POST'])
 @login_required
 @permission_required('programa_lm.edit')
 @csrf_required
 def toggle_status_lm(orden_id):
-    try:
-        orden = db_session.get(OrdenLM, orden_id)
-        if orden:
-            orden.status = 'Completada' if orden.status == 'Pendiente' else 'Pendiente'
-            flash(f"Orden '{orden.wip_order}' marcada como {orden.status}.", "success")
-            db_session.commit(); log_activity("Cambio Estado Orden LM", f"Orden ID {orden.id} a estado '{orden.status}'", "PROGRAMA_LM")
-        else: flash("La orden no fue encontrada.", "danger")
-    except Exception as e:
-        db_session.rollback(); flash(f"Error al cambiar el estado de la orden: {e}", "danger")
-    return redirect(request.referrer or url_for('programa_lm'))
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
+    return redirect(url_for('programa_lm'))
 
+# Las rutas que responden a AJAX (JS) devuelven un error claro.
+@app.route('/programa_lm/update_cell', methods=['POST'])
+@login_required
+@permission_required('programa_lm.edit', 'programa_lm.admin')
+@csrf_required
+def update_cell_lm():
+    return jsonify({'status': 'error', 'message': 'Servicio no disponible: la sección está en mantenimiento.'}), 503
+
+# Todas las demás funciones de administración también se desactivan.
 @app.route('/programa_lm/reorder_columns', methods=['POST'])
 @login_required
 @permission_required('programa_lm.admin')
 @csrf_required
 def reorder_columns():
-    try:
-        data = request.json; ordered_ids = data.get('ordered_ids', [])
-        for index, col_id_str in enumerate(ordered_ids):
-            try: col_id = int(col_id_str)
-            except (ValueError, TypeError): continue
-            columna = db_session.get(ColumnaLM, col_id)
-            if columna: columna.orden = index
-        db_session.commit(); log_activity("Reordenar Columnas LM", "Nuevo orden guardado.", "ADMIN")
-        return jsonify({'status': 'success', 'message': 'Orden de columnas guardado.'})
-    except Exception as e:
-        db_session.rollback(); print(f"Error al reordenar columnas: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify({'status': 'error', 'message': 'Servicio no disponible: la sección está en mantenimiento.'}), 503
 
 @app.route('/programa_lm/edit_row/<int:orden_id>', methods=['POST'])
 @login_required
 @permission_required('programa_lm.admin')
 @csrf_required
 def edit_row_lm(orden_id):
-    try:
-        orden = db_session.query(OrdenLM).get(orden_id)
-        if not orden: flash("La orden que intentas editar no existe.", "danger"); return redirect(url_for('programa_lm'))
-        new_wip = request.form.get('wip_order'); new_item = request.form.get('item'); new_qty = request.form.get('qty')
-        existing_order = db_session.query(OrdenLM).filter(OrdenLM.wip_order == new_wip).first()
-        if existing_order and existing_order.id != orden_id:
-            flash(f"El WIP Order '{new_wip}' ya pertenece a otra orden.", "danger"); return redirect(url_for('programa_lm'))
-        orden.wip_order = new_wip; orden.item = new_item; orden.qty = int(new_qty)
-        db_session.commit(); log_activity("Edición Fila LM", f"Orden WIP '{new_wip}' (ID: {orden_id}) actualizada.", "ADMIN")
-        flash("Orden actualizada correctamente.", "success")
-    except Exception as e:
-        db_session.rollback(); flash(f"Error al editar la orden: {e}", "danger")
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
     return redirect(url_for('programa_lm'))
-
-@app.route('/programa_lm/update_cell', methods=['POST'])
-@login_required
-@permission_required('programa_lm.edit', 'programa_lm.admin')
-@csrf_required
-def update_cell_lm():
-    try:
-        data = request.json; orden_id, columna_id = int(data.get('orden_id')), int(data.get('columna_id'))
-        valor, estilos_dict = data.get('valor', None), data.get('estilos_css', None)
-        columna = db_session.get(ColumnaLM, columna_id)
-        if not columna: return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
-        if 'programa_lm.admin' not in session['permissions'] and not columna.editable_por_lm:
-            return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
-        celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
-        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
-            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id); db_session.add(celda)
-        if celda:
-            if valor is not None: celda.valor = valor.strip()
-            if estilos_dict is not None: celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
-            if not celda.valor and not celda.estilos_css:
-                db_session.delete(celda); log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}")
-            else: log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'")
-        db_session.commit(); return jsonify({'status': 'success', 'message': 'Celda actualizada'})
-    except Exception as e:
-        db_session.rollback(); print(f"Error al actualizar celda: {e}"); log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error")
-        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
 
 @app.route('/programa_lm/add_row', methods=['POST'])
 @login_required
 @permission_required('programa_lm.admin')
 @csrf_required
 def add_row_lm():
-    wip_order, item, qty = request.form.get('wip_order'), request.form.get('item'), request.form.get('qty', 1, type=int)
-    if not wip_order: flash("El campo 'WIP Order' es obligatorio.", "danger")
-    elif db_session.query(OrdenLM).filter_by(wip_order=wip_order).first(): flash(f"La orden WIP '{wip_order}' ya existe.", "warning")
-    else:
-        db_session.add(OrdenLM(wip_order=wip_order, item=item, qty=qty)); db_session.commit()
-        log_activity("Creación Fila LM", f"Nueva orden WIP creada: {wip_order}", "ADMIN"); flash("Nueva orden agregada exitosamente.", "success")
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/add_column', methods=['POST'])
@@ -728,12 +665,7 @@ def add_row_lm():
 @permission_required('programa_lm.admin')
 @csrf_required
 def add_column_lm():
-    nombre_columna = request.form.get('nombre_columna')
-    if not nombre_columna: flash("El nombre de la columna es obligatorio.", "danger")
-    elif db_session.query(ColumnaLM).filter_by(nombre=nombre_columna).first(): flash(f"La columna '{nombre_columna}' ya existe.", "warning")
-    else:
-        db_session.add(ColumnaLM(nombre=nombre_columna, editable_por_lm=True)); db_session.commit()
-        log_activity("Creación Columna LM", f"Nueva columna creada: {nombre_columna}", "ADMIN"); flash("Nueva columna agregada exitosamente.", "success")
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/delete_row/<int:orden_id>', methods=['POST'])
@@ -741,15 +673,7 @@ def add_column_lm():
 @permission_required('programa_lm.admin')
 @csrf_required
 def delete_row_lm(orden_id):
-    try:
-        orden = db_session.query(OrdenLM).get(orden_id)
-        if orden:
-            wip_order = orden.wip_order; db_session.delete(orden); db_session.commit()
-            log_activity("Eliminación Fila LM", f"Orden WIP '{wip_order}' (ID: {orden_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
-            flash(f"La orden '{wip_order}' ha sido eliminada.", "success")
-        else: flash("La orden que intentas eliminar no existe.", "danger")
-    except Exception as e:
-        db_session.rollback(); flash(f"Error al eliminar la orden: {e}", "danger")
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/delete_column/<int:columna_id>', methods=['POST'])
@@ -757,16 +681,7 @@ def delete_row_lm(orden_id):
 @permission_required('programa_lm.admin')
 @csrf_required
 def delete_column_lm(columna_id):
-    try:
-        columna_a_eliminar = db_session.get(ColumnaLM, columna_id)
-        if columna_a_eliminar:
-            nombre_columna = columna_a_eliminar.nombre; db_session.delete(columna_a_eliminar); db_session.commit()
-            log_activity("Eliminación Columna LM", f"Columna '{nombre_columna}' (ID: {columna_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
-            flash(f"La columna '{nombre_columna}' y todos sus datos han sido eliminados exitosamente.", "success")
-        else: flash("La columna que intentas eliminar no existe.", "danger")
-    except exc.SQLAlchemyError as e:
-        db_session.rollback(); flash(f"Error al eliminar la columna: {e}", "danger")
-        log_activity("Error Eliminación Columna LM", f"Error al intentar borrar columna ID {columna_id}: {e}", "ADMIN", "Error", "Critical")
+    flash("La función no está disponible, la sección está en mantenimiento.", "warning")
     return redirect(url_for('programa_lm'))
 
 @app.route('/centro_acciones')
