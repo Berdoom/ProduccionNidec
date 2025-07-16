@@ -22,7 +22,7 @@ from sqlalchemy import func, exc, extract, or_
 from database import (
     db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, 
     OutputData, SolicitudCorreccion, init_db, create_default_admin, 
-    Rol, Turno, OrdenLM, ColumnaLM, DatoCeldaLM
+    Rol, Turno, OrdenLM, ColumnaLM, DatoCeldaLM, Permission # <-- se añade Permission
 )
 
 try:
@@ -45,9 +45,9 @@ def inject_global_vars():
     user = None
     if 'username' in session:
         user = db_session.query(Usuario).filter_by(username=session['username']).first()
-    
     pending_actions_count = 0
-    if session.get('role') == 'ADMIN':
+    # Permisos: solo si tiene permiso de centro de acciones
+    if 'actions.center' in session.get('permissions', []):
         try:
             desviaciones_count = db_session.query(func.count(Pronostico.id)).filter(
                 Pronostico.status == 'Nuevo', Pronostico.razon_desviacion.isnot(None), Pronostico.razon_desviacion != ''
@@ -56,8 +56,11 @@ def inject_global_vars():
             pending_actions_count = desviaciones_count + correcciones_count
         except Exception as e:
             print(f"Error al contar acciones pendientes: {e}")
-
-    return dict(current_user=user, pending_actions_count=pending_actions_count)
+    return dict(
+        current_user=user,
+        pending_actions_count=pending_actions_count,
+        permissions=session.get('permissions', [])
+    )
 
 with app.app_context():
     init_db()
@@ -145,12 +148,22 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def role_required(allowed_roles):
+def permission_required(*permissions_to_check):
+    """
+    Decorador de permisos. Permite acceso si el usuario tiene al menos uno de los permisos requeridos
+    o el permiso global 'admin.access'.
+    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if session.get('role') not in allowed_roles:
-                flash('No tienes permiso para acceder a esta página.', 'danger')
+            if 'loggedin' not in session:
+                flash('Debes iniciar sesión para acceder a esta página.', 'warning')
+                return redirect(url_for('login'))
+            user_permissions = session.get('permissions', [])
+            if 'admin.access' in user_permissions:
+                return f(*args, **kwargs)
+            if not any(p in user_permissions for p in permissions_to_check):
+                flash('No tienes los permisos necesarios para acceder a esta página.', 'danger')
                 return redirect(url_for('dashboard'))
             return f(*args, **kwargs)
         return decorated_function
@@ -176,7 +189,7 @@ def csrf_required(f):
 def login():
     if 'loggedin' in session: return redirect(url_for('dashboard'))
     if request.method == 'POST':
-        user = db_session.query(Usuario).filter(Usuario.username == request.form.get('username')).first()
+        user = db_session.query(Usuario).options(joinedload(Usuario.role).joinedload(Rol.permissions)).filter(Usuario.username == request.form.get('username')).first()
         if user and user.role and check_password_hash(user.password_hash, request.form.get('password')):
             session.clear()
             session.permanent = True
@@ -185,6 +198,7 @@ def login():
             session['username'] = user.username
             session['role'] = user.role.nombre 
             session['nombre_completo'] = user.nombre_completo
+            session['permissions'] = [p.name for p in user.role.permissions]
             session['csrf_token'] = secrets.token_hex(16)
             log_activity("Inicio de sesión", f"Rol: {user.role.nombre}", 'Sistema', 'Autenticación', 'Info')
             return redirect(url_for('dashboard'))
@@ -205,11 +219,13 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    role = session.get('role')
-    if role in ['IHP', 'FHP']: return redirect(url_for('dashboard_group', group=role.lower()))
-    if role == 'ADMIN': return redirect(url_for('dashboard_admin'))
-    if role == 'PROGRAMA_LM': return redirect(url_for('programa_lm'))
-    flash('No tienes un dashboard asignado.', 'warning')
+    perms = session.get('permissions', [])
+    if 'dashboard.view.admin' in perms: return redirect(url_for('dashboard_admin'))
+    if 'dashboard.view.group' in perms:
+        role = session.get('role')
+        if role in ['IHP', 'FHP']: return redirect(url_for('dashboard_group', group=role.lower()))
+    if 'programa_lm.view' in perms: return redirect(url_for('programa_lm'))
+    flash('No tienes permisos para ver ningún dashboard.', 'warning')
     return redirect(url_for('login'))
 
 # ===============================================================
@@ -328,7 +344,7 @@ def get_daily_summary(group, target_date):
 
 @app.route('/dashboard/admin')
 @login_required
-@role_required(['ADMIN'])
+@permission_required('dashboard.view.admin')
 def dashboard_admin():
     selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
     try: selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
@@ -350,10 +366,14 @@ def dashboard_admin():
 
 @app.route('/dashboard/<group>')
 @login_required
+@permission_required('dashboard.view.group')
 def dashboard_group(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
-    if session.get('role') not in [group_upper, 'ADMIN']: flash('No tienes permiso para ver este dashboard.', 'danger'); return redirect(url_for('dashboard'))
+    # Nueva comprobación: El usuario debe ser del grupo o tener permiso de admin
+    if 'admin.access' not in session.get('permissions', []) and session.get('role') != group_upper:
+        flash('No tienes permiso para ver este dashboard de grupo.', 'danger')
+        return redirect(url_for('dashboard'))
     
     today_str = get_business_date().strftime('%Y-%m-%d')
     yesterday_str = (get_business_date() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -373,6 +393,7 @@ def dashboard_group(group):
 
 @app.route('/registro/<group>')
 @login_required
+@permission_required('registro.view')
 def registro(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
@@ -400,7 +421,7 @@ def registro(group):
 
 @app.route('/reportes')
 @login_required
-@role_required(['ADMIN', 'IHP', 'FHP'])
+@permission_required('reportes.view')
 def reportes():
     # --- Configuración Inicial ---
     user_role = session.get('role'); is_admin = user_role == 'ADMIN'
@@ -500,6 +521,7 @@ def reportes():
 
 @app.route('/captura/<group>', methods=['GET', 'POST'])
 @login_required
+@permission_required('captura.access')
 @csrf_required
 def captura(group):
     group_upper = group.upper()
@@ -567,6 +589,7 @@ def captura(group):
 # ===============================================================
 @app.route('/submit_reason', methods=['POST'])
 @login_required
+@permission_required('captura.access')
 @csrf_required
 def submit_reason():
     """
@@ -608,6 +631,7 @@ def submit_reason():
 
 @app.route('/export_excel/<group>')
 @login_required
+@permission_required('registro.view')
 def export_excel(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
@@ -674,7 +698,7 @@ def export_excel(group):
 # ===============================================================
 @app.route('/programa_lm')
 @login_required
-@role_required(['ADMIN', 'PROGRAMA_LM'])
+@permission_required('programa_lm.view')
 def programa_lm():
     try:
         # Solo muestra las órdenes con estado 'Pendiente'
@@ -702,7 +726,7 @@ def programa_lm():
 # --- NUEVA RUTA PARA ÓRDENES APROBADAS ---
 @app.route('/programa_lm/aprobados')
 @login_required
-@role_required(['ADMIN', 'PROGRAMA_LM'])
+@permission_required('programa_lm.view')
 def programa_lm_aprobados():
     try:
         # Solo muestra las órdenes con estado 'Completada'
@@ -730,7 +754,7 @@ def programa_lm_aprobados():
 # --- NUEVA RUTA PARA CAMBIAR EL ESTADO ---
 @app.route('/programa_lm/toggle_status/<int:orden_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN', 'PROGRAMA_LM'])
+@permission_required('programa_lm.edit')
 @csrf_required
 def toggle_status_lm(orden_id):
     try:
@@ -752,9 +776,56 @@ def toggle_status_lm(orden_id):
         flash(f"Error al cambiar el estado de la orden: {e}", "danger")
     return redirect(request.referrer or url_for('programa_lm'))
 
+@app.route('/programa_lm/update_cell', methods=['POST'])
+@login_required
+@permission_required('programa_lm.edit', 'programa_lm.admin')
+@csrf_required
+def update_cell_lm():
+    try:
+        data = request.json
+        orden_id = int(data.get('orden_id'))
+        columna_id = int(data.get('columna_id'))
+        valor = data.get('valor', None)
+        estilos_dict = data.get('estilos_css', None)
+
+        columna = db_session.get(ColumnaLM, columna_id)
+        user_permissions = session.get('permissions', [])
+        if not columna:
+            return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
+        if 'programa_lm.admin' not in user_permissions and not columna.editable_por_lm:
+            return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
+
+        celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
+
+        # Crear solo si hay algo que guardar
+        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
+            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id)
+            db_session.add(celda)
+
+        if celda:
+            if valor is not None:
+                celda.valor = valor.strip()
+            if estilos_dict is not None:
+                celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
+
+            # Limpieza: eliminar si queda vacía
+            if not celda.valor and not celda.estilos_css:
+                db_session.delete(celda)
+                log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}", "PROGRAMA_LM", "Datos", "Info")
+            else:
+                log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'", "PROGRAMA_LM", "Datos", "Info")
+
+        db_session.commit()
+        return jsonify({'status': 'success', 'message': 'Celda actualizada'})
+    except Exception as e:
+        db_session.rollback()
+        print(f"Error al actualizar celda: {e}")
+        log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error", "Critical")
+        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
+
 @app.route('/programa_lm/reorder_columns', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def reorder_columns():
     try:
@@ -779,7 +850,7 @@ def reorder_columns():
 
 @app.route('/programa_lm/edit_row/<int:orden_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def edit_row_lm(orden_id):
     """
@@ -815,55 +886,9 @@ def edit_row_lm(orden_id):
     
     return redirect(url_for('programa_lm'))
 
-@app.route('/programa_lm/update_cell', methods=['POST'])
-@login_required
-@csrf_required
-def update_cell_lm():
-    try:
-        data = request.json
-        orden_id = int(data.get('orden_id'))
-        columna_id = int(data.get('columna_id'))
-        valor = data.get('valor', None)
-        estilos_dict = data.get('estilos_css', None)
-
-        columna = db_session.get(ColumnaLM, columna_id)
-        if not columna:
-            return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
-        if session['role'] != 'ADMIN' and not columna.editable_por_lm:
-            return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
-
-        celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
-
-        # Crear solo si hay algo que guardar
-        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
-            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id)
-            db_session.add(celda)
-
-        if celda:
-            if valor is not None:
-                celda.valor = valor.strip()
-            if estilos_dict is not None:
-                celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
-
-            # Limpieza: eliminar si queda vacía
-            if not celda.valor and not celda.estilos_css:
-                db_session.delete(celda)
-                log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}", "PROGRAMA_LM", "Datos", "Info")
-            else:
-                log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'", "PROGRAMA_LM", "Datos", "Info")
-
-        db_session.commit()
-        return jsonify({'status': 'success', 'message': 'Celda actualizada'})
-
-    except Exception as e:
-        db_session.rollback()
-        print(f"Error al actualizar celda: {e}")
-        log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error", "Critical")
-        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
-
 @app.route('/programa_lm/add_row', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def add_row_lm():
     wip_order, item, qty = request.form.get('wip_order'), request.form.get('item'), request.form.get('qty', 1, type=int)
@@ -877,7 +902,7 @@ def add_row_lm():
 
 @app.route('/programa_lm/add_column', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def add_column_lm():
     nombre_columna = request.form.get('nombre_columna')
@@ -891,7 +916,7 @@ def add_column_lm():
 
 @app.route('/programa_lm/delete_row/<int:orden_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def delete_row_lm(orden_id):
     """
@@ -917,7 +942,7 @@ def delete_row_lm(orden_id):
 
 @app.route('/programa_lm/delete_column/<int:columna_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('programa_lm.admin')
 @csrf_required
 def delete_column_lm(columna_id):
     try:
@@ -943,7 +968,7 @@ def delete_column_lm(columna_id):
 
 @app.route('/centro_acciones')
 @login_required
-@role_required(['ADMIN'])
+@permission_required('actions.center')
 def centro_acciones():
     if request.args.get('limpiar'): session.pop('acciones_filtros', None); return redirect(url_for('centro_acciones'))
     filtros = session.get('acciones_filtros', {})
@@ -967,6 +992,7 @@ def centro_acciones():
 
 @app.route('/solicitar_correccion', methods=['POST'])
 @login_required
+@permission_required('captura.access')
 @csrf_required
 def solicitar_correccion():
     try:
@@ -979,7 +1005,7 @@ def solicitar_correccion():
 
 @app.route('/update_reason_status/<int:reason_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('actions.center')
 @csrf_required
 def update_reason_status(reason_id):
     reason = db_session.query(Pronostico).get(reason_id)
@@ -992,7 +1018,7 @@ def update_reason_status(reason_id):
 
 @app.route('/update_solicitud_status/<int:solicitud_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('actions.center')
 @csrf_required
 def update_solicitud_status(solicitud_id):
     solicitud = db_session.query(SolicitudCorreccion).get(solicitud_id)
@@ -1005,7 +1031,7 @@ def update_solicitud_status(solicitud_id):
 
 @app.route('/manage_users', methods=['GET', 'POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('users.manage')
 @csrf_required
 def manage_users():
     if request.method == 'POST' and request.form.get('form_type') == 'create_user':
@@ -1056,17 +1082,12 @@ def manage_users():
 
 @app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('users.manage')
 @csrf_required
 def edit_user(user_id):
-    # ===== CAMBIO AQUÍ =====
-    # Original: user = db_session.query(Usuario).get_or_404(user_id)
-    # Corrección: Usamos el método get() estándar y verificamos el resultado.
     user = db_session.get(Usuario, user_id)
     if not user:
-        abort(404) # Si el usuario no existe, se devuelve un error 404 (Not Found).
-    # ===== FIN DEL CAMBIO =====
-
+        abort(404)
     if request.method == 'POST':
         new_username = request.form.get('username')
         if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first():
@@ -1103,7 +1124,7 @@ def edit_user(user_id):
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('users.manage')
 @csrf_required
 def delete_user(user_id):
     if user_id == session.get('user_id'): flash('No puedes eliminar tu propia cuenta.', 'danger')
@@ -1117,7 +1138,7 @@ def delete_user(user_id):
 
 @app.route('/activity_log')
 @login_required
-@role_required(['ADMIN'])
+@permission_required('logs.view')
 def activity_log():
     if request.args.get('limpiar'): session.pop('log_filtros', None); return redirect(url_for('activity_log'))
     filtros = session.get('log_filtros', {}) if not request.args else {'fecha_inicio': request.args.get('fecha_inicio'), 'fecha_fin': request.args.get('fecha_fin'), 'usuario': request.args.get('usuario'), 'area_grupo': request.args.get('area_grupo'), 'category': request.args.get('category'), 'severity': request.args.get('severity')}
@@ -1135,7 +1156,7 @@ def activity_log():
 
 @app.route('/manage_roles', methods=['GET', 'POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('roles.manage')
 @csrf_required
 def manage_roles():
     if request.method == 'POST':
@@ -1150,7 +1171,7 @@ def manage_roles():
 
 @app.route('/delete_role/<int:role_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('roles.manage')
 @csrf_required
 def delete_role(role_id):
     rol = db_session.query(Rol).get(role_id)
@@ -1163,7 +1184,7 @@ def delete_role(role_id):
 
 @app.route('/manage_turnos', methods=['GET', 'POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('users.manage')
 @csrf_required
 def manage_turnos():
     if request.method == 'POST':
@@ -1178,7 +1199,7 @@ def manage_turnos():
 
 @app.route('/delete_turno/<int:turno_id>', methods=['POST'])
 @login_required
-@role_required(['ADMIN'])
+@permission_required('users.manage')
 @csrf_required
 def delete_turno(turno_id):
     turno = db_session.query(Turno).get(turno_id)
@@ -1187,6 +1208,32 @@ def delete_turno(turno_id):
         else: flash(f"Turno '{turno.nombre}' eliminado.", 'success'); db_session.delete(turno); db_session.commit()
     else: flash("El turno no existe.", 'danger')
     return redirect(url_for('manage_turnos'))
+
+# Nueva ruta para gestionar permisos por rol
+@app.route('/manage_permissions/<int:role_id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('roles.manage')
+@csrf_required
+def manage_permissions(role_id):
+    rol = db_session.query(Rol).options(joinedload(Rol.permissions)).get(role_id)
+    if not rol:
+        flash("El rol especificado no existe.", "danger")
+        return redirect(url_for('manage_roles'))
+    if request.method == 'POST':
+        if rol.nombre == 'ADMIN':
+            flash("Los permisos del rol ADMIN no se pueden modificar.", "danger")
+            return redirect(url_for('manage_roles'))
+        selected_permission_ids = request.form.getlist('permissions')
+        selected_permissions = db_session.query(Permission).filter(Permission.id.in_(selected_permission_ids)).all()
+        rol.permissions = selected_permissions
+        db_session.commit()
+        log_activity("Actualización de Permisos", f"Permisos actualizados para el rol '{rol.nombre}'.", 'ADMIN', 'Seguridad', 'Warning')
+        flash(f"Permisos para el rol '{rol.nombre}' actualizados correctamente.", "success")
+        return redirect(url_for('manage_roles'))
+    all_permissions = db_session.query(Permission).order_by(Permission.name).all()
+    if rol.nombre == 'ADMIN':
+        flash('Los permisos del rol ADMIN no son editables para garantizar la estabilidad del sistema.', 'info')
+    return render_template('manage_permissions.html', rol=rol, all_permissions=all_permissions)
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
