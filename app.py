@@ -22,7 +22,7 @@ from sqlalchemy import func, exc, extract, or_
 from database import (
     db_session, Usuario, Pronostico, ProduccionCaptura, ActivityLog, 
     OutputData, SolicitudCorreccion, init_db, create_default_admin, 
-    Rol, Turno, OrdenLM, ColumnaLM, DatoCeldaLM, Permission # <-- se añade Permission
+    Rol, Turno, OrdenLM, ColumnaLM, DatoCeldaLM, Permission
 )
 
 try:
@@ -46,7 +46,6 @@ def inject_global_vars():
     if 'username' in session:
         user = db_session.query(Usuario).filter_by(username=session['username']).first()
     pending_actions_count = 0
-    # Permisos: solo si tiene permiso de centro de acciones
     if 'actions.center' in session.get('permissions', []):
         try:
             desviaciones_count = db_session.query(func.count(Pronostico.id)).filter(
@@ -75,6 +74,48 @@ def shutdown_session(exception=None):
 @app.before_request
 def before_request_handler():
     session.permanent = True
+
+# ===============================================================
+# === DECORADORES ===
+# ===============================================================
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'loggedin' not in session:
+            flash('Debes iniciar sesión para acceder a esta página. Tu sesión puede haber expirado.', 'warning')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def permission_required(*permissions_to_check):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'loggedin' not in session:
+                flash('Debes iniciar sesión para acceder a esta página.', 'warning')
+                return redirect(url_for('login'))
+            user_permissions = session.get('permissions', [])
+            if 'admin.access' in user_permissions:
+                return f(*args, **kwargs)
+            if not any(p in user_permissions for p in permissions_to_check):
+                flash('No tienes los permisos necesarios para acceder a esta página.', 'danger')
+                return redirect(url_for('dashboard'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+def csrf_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method == "POST":
+            token = request.form.get("csrf_token") or (request.is_json and request.json.get("csrf_token"))
+            if not token or token != session.get("csrf_token"):
+                flash("Error de seguridad (CSRF Token inválido).", "danger")
+                if request.is_json: return jsonify({'status': 'error', 'message': 'CSRF token missing or incorrect'}), 403
+                return redirect(request.url)
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ===============================================================
 # === CONSTANTES Y FUNCIONES DE UTILIDAD ===
@@ -136,52 +177,6 @@ def get_kpi_color_class(eficiencia):
 app.jinja_env.filters['get_kpi_color'] = get_kpi_color_class
 
 # ===============================================================
-# === DECORADORES ===
-# ===============================================================
-
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'loggedin' not in session:
-            flash('Debes iniciar sesión para acceder a esta página. Tu sesión puede haber expirado.', 'warning')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def permission_required(*permissions_to_check):
-    """
-    Decorador de permisos. Permite acceso si el usuario tiene al menos uno de los permisos requeridos
-    o el permiso global 'admin.access'.
-    """
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if 'loggedin' not in session:
-                flash('Debes iniciar sesión para acceder a esta página.', 'warning')
-                return redirect(url_for('login'))
-            user_permissions = session.get('permissions', [])
-            if 'admin.access' in user_permissions:
-                return f(*args, **kwargs)
-            if not any(p in user_permissions for p in permissions_to_check):
-                flash('No tienes los permisos necesarios para acceder a esta página.', 'danger')
-                return redirect(url_for('dashboard'))
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
-
-def csrf_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if request.method == "POST":
-            token = request.form.get("csrf_token") or (request.is_json and request.json.get("csrf_token"))
-            if not token or token != session.get("csrf_token"):
-                flash("Error de seguridad (CSRF Token inválido).", "danger")
-                if request.is_json: return jsonify({'status': 'error', 'message': 'CSRF token missing or incorrect'}), 403
-                return redirect(request.url)
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ===============================================================
 # === RUTAS DE AUTENTICACIÓN Y NAVEGACIÓN PRINCIPAL ===
 # ===============================================================
 
@@ -191,12 +186,9 @@ def login():
     if request.method == 'POST':
         user = db_session.query(Usuario).options(joinedload(Usuario.role).joinedload(Rol.permissions)).filter(Usuario.username == request.form.get('username')).first()
         if user and user.role and check_password_hash(user.password_hash, request.form.get('password')):
-            session.clear()
-            session.permanent = True
-            session['loggedin'] = True
-            session['user_id'] = user.id
-            session['username'] = user.username
-            session['role'] = user.role.nombre 
+            session.clear(); session.permanent = True
+            session['loggedin'] = True; session['user_id'] = user.id
+            session['username'] = user.username; session['role'] = user.role.nombre 
             session['nombre_completo'] = user.nombre_completo
             session['permissions'] = [p.name for p in user.role.permissions]
             session['csrf_token'] = secrets.token_hex(16)
@@ -212,9 +204,7 @@ def login():
 @login_required
 def logout():
     log_activity("Cierre de sesión", "", 'Sistema', 'Autenticación', 'Info')
-    session.clear()
-    flash('Has cerrado sesión correctamente.', 'info')
-    return redirect(url_for('login'))
+    session.clear(); flash('Has cerrado sesión correctamente.', 'info'); return redirect(url_for('login'))
 
 @app.route('/dashboard')
 @login_required
@@ -225,7 +215,11 @@ def dashboard():
         role = session.get('role')
         if role in ['IHP', 'FHP']: return redirect(url_for('dashboard_group', group=role.lower()))
     if 'programa_lm.view' in perms: return redirect(url_for('programa_lm'))
-    flash('No tienes permisos para ver ningún dashboard.', 'warning')
+    
+    # --- CORRECCIÓN DEL BUCLE DE REDIRECCIÓN ---
+    flash('No tienes permisos para ver ningún dashboard. Se ha cerrado tu sesión.', 'warning')
+    log_activity("Cierre de sesión automático", "Usuario sin permisos de dashboard.", 'Sistema', 'Seguridad', 'Warning')
+    session.clear()
     return redirect(url_for('login'))
 
 # ===============================================================
@@ -370,10 +364,8 @@ def dashboard_admin():
 def dashboard_group(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
-    # Nueva comprobación: El usuario debe ser del grupo o tener permiso de admin
     if 'admin.access' not in session.get('permissions', []) and session.get('role') != group_upper:
-        flash('No tienes permiso para ver este dashboard de grupo.', 'danger')
-        return redirect(url_for('dashboard'))
+        flash('No tienes permiso para ver este dashboard de grupo.', 'danger'); return redirect(url_for('dashboard'))
     
     today_str = get_business_date().strftime('%Y-%m-%d')
     yesterday_str = (get_business_date() - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -397,7 +389,8 @@ def dashboard_group(group):
 def registro(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
-    if session.get('role') not in [group_upper, 'ADMIN']: flash('No tienes permiso para ver este registro.', 'danger'); return redirect(url_for('dashboard'))
+    if 'admin.access' not in session.get('permissions', []) and session.get('role') != group_upper:
+        flash('No tienes permiso para ver este registro.', 'danger'); return redirect(url_for('dashboard'))
     
     selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
     try: selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
@@ -423,35 +416,24 @@ def registro(group):
 @login_required
 @permission_required('reportes.view')
 def reportes():
-    # --- Configuración Inicial ---
-    user_role = session.get('role'); is_admin = user_role == 'ADMIN'
+    is_admin = 'admin.access' in session.get('permissions', [])
+    user_role = session.get('role')
     default_group = user_role if user_role in ['IHP', 'FHP'] else 'IHP'
-    
     group = request.args.get('group', default_group)
     if not is_admin: group = user_role
         
     report_type = request.args.get('report_type', 'single_day')
     today = get_business_date()
+    context = {'group': group, 'is_admin': is_admin, 'report_type': report_type, 'start_date': today.strftime('%Y-%m-%d'), 'end_date': today.strftime('%Y-%m-%d'), 'weekly_data': None, 'monthly_data': None, 'range_data': None, 'comparison_data': None}
 
-    # --- Inicializar variables de datos ---
-    context = {
-        'group': group, 'is_admin': is_admin, 'report_type': report_type,
-        'start_date': today.strftime('%Y-%m-%d'), 'end_date': today.strftime('%Y-%m-%d'),
-        'weekly_data': None, 'monthly_data': None, 'range_data': None, 'comparison_data': None
-    }
-
-    # --- Lógica de Procesamiento de Datos ---
     if report_type == 'single_day':
         selected_date_str = request.args.get('start_date', today.strftime('%Y-%m-%d'))
-        context['start_date'] = selected_date_str
-        selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
-
+        context['start_date'] = selected_date_str; selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
         start_of_week = selected_date - timedelta(days=selected_date.weekday())
         week_labels = [(start_of_week + timedelta(days=i)).strftime('%a %d') for i in range(7)]
         week_prod_data = [get_daily_summary(group, start_of_week + timedelta(days=i))['producido'] for i in range(7)]
         week_pron_data = [get_daily_summary(group, start_of_week + timedelta(days=i))['pronostico'] for i in range(7)]
         context['weekly_data'] = {'labels': week_labels, 'producido': week_prod_data, 'pronostico': week_pron_data}
-
         days_in_month = calendar.monthrange(selected_date.year, selected_date.month)[1]
         month_labels = [str(day) for day in range(1, days_in_month + 1)]
         month_prod_data = [get_daily_summary(group, date(selected_date.year, selected_date.month, day))['producido'] for day in range(1, days_in_month + 1)]
@@ -461,61 +443,27 @@ def reportes():
     elif report_type == 'date_range':
         start_date_str = request.args.get('start_date', (today - timedelta(days=6)).strftime('%Y-%m-%d'))
         end_date_str = request.args.get('end_date', today.strftime('%Y-%m-%d'))
-        context['start_date'] = start_date_str
-        context['end_date'] = end_date_str
-        
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        
+        context['start_date'] = start_date_str; context['end_date'] = end_date_str
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date(); end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
         range_labels, range_prod, range_pron, range_eff, table_rows = [], [], [], [], []
-        delta = end_date - start_date
-        
-        for i in range(delta.days + 1):
-            current_date = start_date + timedelta(days=i)
-            summary = get_daily_summary(group, current_date)
-            
-            range_labels.append(current_date.strftime('%d/%m/%Y'))
-            range_prod.append(summary['producido'])
-            range_pron.append(summary['pronostico'])
-            range_eff.append(round(summary['eficiencia'], 1))
+        for i in range((end_date - start_date).days + 1):
+            current_date = start_date + timedelta(days=i); summary = get_daily_summary(group, current_date)
+            range_labels.append(current_date.strftime('%d/%m/%Y')); range_prod.append(summary['producido'])
+            range_pron.append(summary['pronostico']); range_eff.append(round(summary['eficiencia'], 1))
             table_rows.append({'fecha': current_date.strftime('%d/%m/%Y'), **summary})
-            
-        context['range_data'] = {
-            'chart': {'labels': range_labels, 'producido': range_prod, 'pronostico': range_pron, 'eficiencia': range_eff},
-            'table': table_rows
-        }
+        context['range_data'] = {'chart': {'labels': range_labels, 'producido': range_prod, 'pronostico': range_pron, 'eficiencia': range_eff}, 'table': table_rows}
 
-    # --- NUEVA LÓGICA PARA COMPARAR GRUPOS ---
     elif report_type == 'group_comparison':
         start_date_str = request.args.get('start_date', (today - timedelta(days=6)).strftime('%Y-%m-%d'))
         end_date_str = request.args.get('end_date', today.strftime('%Y-%m-%d'))
-        context['start_date'] = start_date_str
-        context['end_date'] = end_date_str
-        
-        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        
-        labels, ihp_prod_data, fhp_prod_data = [], [], []
-        total_ihp = 0
-        total_fhp = 0
-        
-        delta = end_date - start_date
-        for i in range(delta.days + 1):
-            current_date = start_date + timedelta(days=i)
-            labels.append(current_date.strftime('%d/%m'))
-            
-            summary_ihp = get_daily_summary('IHP', current_date)
-            ihp_prod_data.append(summary_ihp['producido'])
-            total_ihp += summary_ihp['producido']
-            
-            summary_fhp = get_daily_summary('FHP', current_date)
-            fhp_prod_data.append(summary_fhp['producido'])
-            total_fhp += summary_fhp['producido']
-            
-        context['comparison_data'] = {
-            'chart': {'labels': labels, 'ihp_data': ihp_prod_data, 'fhp_data': fhp_prod_data},
-            'summary': {'total_ihp': total_ihp, 'total_fhp': total_fhp}
-        }
+        context['start_date'] = start_date_str; context['end_date'] = end_date_str
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date(); end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        labels, ihp_prod_data, fhp_prod_data = [], [], []; total_ihp = 0; total_fhp = 0
+        for i in range((end_date - start_date).days + 1):
+            current_date = start_date + timedelta(days=i); labels.append(current_date.strftime('%d/%m'))
+            summary_ihp = get_daily_summary('IHP', current_date); ihp_prod_data.append(summary_ihp['producido']); total_ihp += summary_ihp['producido']
+            summary_fhp = get_daily_summary('FHP', current_date); fhp_prod_data.append(summary_fhp['producido']); total_fhp += summary_fhp['producido']
+        context['comparison_data'] = {'chart': {'labels': labels, 'ihp_data': ihp_prod_data, 'fhp_data': fhp_prod_data}, 'summary': {'total_ihp': total_ihp, 'total_fhp': total_fhp}}
 
     return render_template('reportes.html', **context)
 
@@ -526,7 +474,8 @@ def reportes():
 def captura(group):
     group_upper = group.upper()
     if group_upper not in ['IHP', 'FHP']: abort(404)
-    if session.get('role') not in [group_upper, 'ADMIN']: flash('No tienes permiso para capturar datos.', 'danger'); return redirect(url_for('dashboard'))
+    if 'admin.access' not in session.get('permissions', []) and session.get('role') != group_upper:
+        flash('No tienes permiso para capturar datos de este grupo.', 'danger'); return redirect(url_for('dashboard'))
     
     nombres_turnos = NOMBRES_TURNOS_PRODUCCION
     areas_list = AREAS_IHP if group_upper == 'IHP' else AREAS_FHP
@@ -584,49 +533,22 @@ def captura(group):
     output_data = get_output_data(group_upper, selected_date_str)
     return render_template('captura_group.html', areas=areas_list, horas_turno=HORAS_TURNO, nombres_turnos=nombres_turnos, selected_date=selected_date_str, data=data_for_template, output_data=output_data, group_name=group_upper)
 
-# ===============================================================
-# === NUEVA RUTA CORREGIDA/AÑADIDA ===
-# ===============================================================
 @app.route('/submit_reason', methods=['POST'])
 @login_required
 @permission_required('captura.access')
 @csrf_required
 def submit_reason():
-    """
-    Recibe una justificación de desviación vía AJAX desde la página de captura 
-    y la guarda en la base de datos.
-    """
     try:
-        date_str = request.form.get('date')
-        area = request.form.get('area')
-        group = request.form.get('group')
-        turno_name = request.form.get('turno_name')
-        reason = request.form.get('reason')
-        
+        date_str = request.form.get('date'); area = request.form.get('area'); group = request.form.get('group'); turno_name = request.form.get('turno_name'); reason = request.form.get('reason')
         selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-
-        pronostico_entry = db_session.query(Pronostico).filter_by(
-            fecha=selected_date,
-            grupo=group.upper(),
-            area=area,
-            turno=turno_name
-        ).first()
-
+        pronostico_entry = db_session.query(Pronostico).filter_by(fecha=selected_date, grupo=group.upper(), area=area, turno=turno_name).first()
         if pronostico_entry:
-            pronostico_entry.razon_desviacion = reason
-            pronostico_entry.usuario_razon = session.get('username')
-            pronostico_entry.fecha_razon = datetime.utcnow()
-            pronostico_entry.status = 'Nuevo'
-            db_session.commit()
+            pronostico_entry.razon_desviacion = reason; pronostico_entry.usuario_razon = session.get('username'); pronostico_entry.fecha_razon = datetime.utcnow(); pronostico_entry.status = 'Nuevo'; db_session.commit()
             log_activity("Justificación Desviación", f"Area: {area}, Turno: {turno_name}", group, 'Datos', 'Info')
             return jsonify({'status': 'success', 'message': 'La razón ha sido guardada exitosamente.'})
-        else:
-            return jsonify({'status': 'error', 'message': 'No se encontró el registro de pronóstico para actualizar.'}), 404
-            
+        else: return jsonify({'status': 'error', 'message': 'No se encontró el registro de pronóstico para actualizar.'}), 404
     except Exception as e:
-        db_session.rollback()
-        log_activity("Error Justificación", str(e), "Sistema", "Error", "Critical")
-        print(f"Error al guardar razón: {e}")
+        db_session.rollback(); log_activity("Error Justificación", str(e), "Sistema", "Error", "Critical"); print(f"Error al guardar razón: {e}")
         return jsonify({'status': 'error', 'message': f'Ocurrió un error en el servidor: {e}'}), 500
 
 @app.route('/export_excel/<group>')
@@ -634,15 +556,11 @@ def submit_reason():
 @permission_required('registro.view')
 def export_excel(group):
     group_upper = group.upper()
-    if group_upper not in ['IHP', 'FHP']: abort(404)
-    if session.get('role') not in [group_upper, 'ADMIN']: flash('No tienes permiso para exportar estos datos.', 'danger'); return redirect(url_for('dashboard'))
-    
     selected_date_str = request.args.get('fecha', get_business_date().strftime('%Y-%m-%d'))
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     all_performance_data = get_detailed_performance_data(selected_date)
     production_data = all_performance_data.get(group_upper, {})
     output_data = get_output_data(group_upper, selected_date_str)
-    
     meta_produccion, nombres_turnos = (4830 if group_upper == 'FHP' else 879), NOMBRES_TURNOS_PRODUCCION
     records = []
     
@@ -653,23 +571,18 @@ def export_excel(group):
                 pronostico, producido = data.get('pronostico', 0), data.get('producido', 0)
                 record[f'Pronóstico {turno_name}'], record[f'Producido {turno_name}'] = pronostico, producido
                 total_pronostico_area += pronostico or 0; total_producido_area += producido or 0
-        record['Pronóstico Total'], record['Producido Total'] = total_pronostico_area, total_producido_area
-        records.append(record)
+        record['Pronóstico Total'], record['Producido Total'] = total_pronostico_area, total_producido_area; records.append(record)
         
     if output_data and (output_data.get('pronostico') or output_data.get('output')):
         output_record = {'Area': 'Output'}
         for turno in nombres_turnos: output_record[f'Pronóstico {turno}'], output_record[f'Producido {turno}'] = None, None
-        output_record['Pronóstico Total'], output_record['Producido Total'] = output_data.get('pronostico', 0), output_data.get('output', 0)
-        records.append(output_record)
+        output_record['Pronóstico Total'], output_record['Producido Total'] = output_data.get('pronostico', 0), output_data.get('output', 0); records.append(output_record)
     
     if not records: flash('No hay datos para exportar en la fecha seleccionada.', 'warning'); return redirect(url_for('registro', group=group_upper, fecha=selected_date_str))
     
     df = pd.DataFrame(records)
-    cols = ['Area']
-    for turno in nombres_turnos: cols.extend([f'Pronóstico {turno}', f'Producido {turno}'])
-    cols.extend(['Pronóstico Total', 'Producido Total'])
-    df = df.reindex(columns=cols)
-    df['Meta'] = meta_produccion
+    cols = ['Area']; [cols.extend([f'Pronóstico {t}', f'Producido {t}']) for t in nombres_turnos]; cols.extend(['Pronóstico Total', 'Producido Total'])
+    df = df.reindex(columns=cols); df['Meta'] = meta_produccion
     
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -678,8 +591,7 @@ def export_excel(group):
         header_format, title_format = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1}), workbook.add_format({'bold': True, 'font_size': 14})
         worksheet.write('A1', f'Reporte de Producción - {group_upper} ({selected_date_str})', title_format)
         for col_num, value in enumerate(df.columns.values): worksheet.write(1, col_num, value, header_format)
-        worksheet.set_column('A:A', 20); worksheet.set_column('B:Z', 15)
-        num_rows = len(df)
+        worksheet.set_column('A:A', 20); worksheet.set_column('B:Z', 15); num_rows = len(df)
         column_chart, line_chart = workbook.add_chart({'type': 'column'}), workbook.add_chart({'type': 'line'})
         column_chart.add_series({'name': ['RegistroProduccion', 1, df.columns.get_loc('Producido Total')], 'categories': ['RegistroProduccion', 2, 0, num_rows + 1, 0], 'values': ['RegistroProduccion', 2, df.columns.get_loc('Producido Total'), num_rows + 1, df.columns.get_loc('Producido Total')], 'fill': {'color': '#24b817'}, 'border': {'color': '#1c8c11'}})
         line_chart.add_series({'name': ['RegistroProduccion', 1, df.columns.get_loc('Meta')], 'categories': ['RegistroProduccion', 2, 0, num_rows + 1, 0], 'values': ['RegistroProduccion', 2, df.columns.get_loc('Meta'), num_rows + 1, df.columns.get_loc('Meta')], 'line': {'color': 'red', 'width': 2.5, 'dash_type': 'solid'}})
@@ -693,65 +605,32 @@ def export_excel(group):
 # === RUTAS PARA PROGRAMA LM, GESTIÓN Y ACCIONES ===
 # ===============================================================
 
-# ===============================================================
-# === NUEVA RUTA CORREGIDA/AÑADIDA ===
-# ===============================================================
 @app.route('/programa_lm')
 @login_required
 @permission_required('programa_lm.view')
 def programa_lm():
     try:
-        # Solo muestra las órdenes con estado 'Pendiente'
         ordenes = db_session.query(OrdenLM).filter(OrdenLM.status == 'Pendiente').order_by(OrdenLM.timestamp.desc()).all()
         columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
-        celdas = db_session.query(DatoCeldaLM).filter(
-            DatoCeldaLM.orden_id.in_([o.id for o in ordenes])
-        ).all()
-        datos_celdas = {}
-        for celda in celdas:
-            if celda.orden_id not in datos_celdas:
-                datos_celdas[celda.orden_id] = {}
-            datos_celdas[celda.orden_id][celda.columna_id] = celda
-
-        return render_template(
-            'programa_lm.html',
-            ordenes=ordenes,
-            columnas=columnas,
-            datos=datos_celdas
-        )
+        celdas = db_session.query(DatoCeldaLM).filter(DatoCeldaLM.orden_id.in_([o.id for o in ordenes])).all()
+        datos_celdas = { (c.orden_id, c.columna_id): c for c in celdas }
+        return render_template('programa_lm.html', ordenes=ordenes, columnas=columnas, datos=datos_celdas)
     except exc.SQLAlchemyError as e:
-        flash(f"Error crítico al cargar el programa LM: {e}", "danger")
-        return redirect(url_for('dashboard'))
+        flash(f"Error crítico al cargar el programa LM: {e}", "danger"); return redirect(url_for('dashboard'))
 
-# --- NUEVA RUTA PARA ÓRDENES APROBADAS ---
 @app.route('/programa_lm/aprobados')
 @login_required
 @permission_required('programa_lm.view')
 def programa_lm_aprobados():
     try:
-        # Solo muestra las órdenes con estado 'Completada'
-        ordenes_completadas = db_session.query(OrdenLM).filter(OrdenLM.status == 'Completada').order_by(OrdenLM.timestamp.desc()).all()
+        ordenes = db_session.query(OrdenLM).filter(OrdenLM.status == 'Completada').order_by(OrdenLM.timestamp.desc()).all()
         columnas = db_session.query(ColumnaLM).order_by(ColumnaLM.orden, ColumnaLM.id).all()
-        celdas = db_session.query(DatoCeldaLM).filter(
-            DatoCeldaLM.orden_id.in_([o.id for o in ordenes_completadas])
-        ).all()
-        datos_celdas = {}
-        for celda in celdas:
-            if celda.orden_id not in datos_celdas:
-                datos_celdas[celda.orden_id] = {}
-            datos_celdas[celda.orden_id][celda.columna_id] = celda
-
-        return render_template(
-            'lm_aprobados.html',
-            ordenes=ordenes_completadas,
-            columnas=columnas,
-            datos=datos_celdas
-        )
+        celdas = db_session.query(DatoCeldaLM).filter(DatoCeldaLM.orden_id.in_([o.id for o in ordenes])).all()
+        datos_celdas = { (c.orden_id, c.columna_id): c for c in celdas }
+        return render_template('lm_aprobados.html', ordenes=ordenes, columnas=columnas, datos=datos_celdas)
     except exc.SQLAlchemyError as e:
-        flash(f"Error al cargar las órdenes aprobadas: {e}", "danger")
-        return redirect(url_for('programa_lm'))
+        flash(f"Error al cargar las órdenes aprobadas: {e}", "danger"); return redirect(url_for('programa_lm'))
 
-# --- NUEVA RUTA PARA CAMBIAR EL ESTADO ---
 @app.route('/programa_lm/toggle_status/<int:orden_id>', methods=['POST'])
 @login_required
 @permission_required('programa_lm.edit')
@@ -760,68 +639,13 @@ def toggle_status_lm(orden_id):
     try:
         orden = db_session.get(OrdenLM, orden_id)
         if orden:
-            # Cambia el estado: si es 'Pendiente' lo pone 'Completada', y viceversa.
-            if orden.status == 'Pendiente':
-                orden.status = 'Completada'
-                flash(f"Orden '{orden.wip_order}' marcada como completada.", "success")
-            else:
-                orden.status = 'Pendiente'
-                flash(f"Orden '{orden.wip_order}' devuelta a pendientes.", "info")
-            db_session.commit()
-            log_activity("Cambio Estado Orden LM", f"Orden ID {orden.id} a estado '{orden.status}'", "PROGRAMA_LM", "Datos", "Info")
-        else:
-            flash("La orden no fue encontrada.", "danger")
+            orden.status = 'Completada' if orden.status == 'Pendiente' else 'Pendiente'
+            flash(f"Orden '{orden.wip_order}' marcada como {orden.status}.", "success")
+            db_session.commit(); log_activity("Cambio Estado Orden LM", f"Orden ID {orden.id} a estado '{orden.status}'", "PROGRAMA_LM")
+        else: flash("La orden no fue encontrada.", "danger")
     except Exception as e:
-        db_session.rollback()
-        flash(f"Error al cambiar el estado de la orden: {e}", "danger")
+        db_session.rollback(); flash(f"Error al cambiar el estado de la orden: {e}", "danger")
     return redirect(request.referrer or url_for('programa_lm'))
-
-@app.route('/programa_lm/update_cell', methods=['POST'])
-@login_required
-@permission_required('programa_lm.edit', 'programa_lm.admin')
-@csrf_required
-def update_cell_lm():
-    try:
-        data = request.json
-        orden_id = int(data.get('orden_id'))
-        columna_id = int(data.get('columna_id'))
-        valor = data.get('valor', None)
-        estilos_dict = data.get('estilos_css', None)
-
-        columna = db_session.get(ColumnaLM, columna_id)
-        user_permissions = session.get('permissions', [])
-        if not columna:
-            return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
-        if 'programa_lm.admin' not in user_permissions and not columna.editable_por_lm:
-            return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
-
-        celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
-
-        # Crear solo si hay algo que guardar
-        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
-            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id)
-            db_session.add(celda)
-
-        if celda:
-            if valor is not None:
-                celda.valor = valor.strip()
-            if estilos_dict is not None:
-                celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
-
-            # Limpieza: eliminar si queda vacía
-            if not celda.valor and not celda.estilos_css:
-                db_session.delete(celda)
-                log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}", "PROGRAMA_LM", "Datos", "Info")
-            else:
-                log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'", "PROGRAMA_LM", "Datos", "Info")
-
-        db_session.commit()
-        return jsonify({'status': 'success', 'message': 'Celda actualizada'})
-    except Exception as e:
-        db_session.rollback()
-        print(f"Error al actualizar celda: {e}")
-        log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error", "Critical")
-        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
 
 @app.route('/programa_lm/reorder_columns', methods=['POST'])
 @login_required
@@ -829,23 +653,16 @@ def update_cell_lm():
 @csrf_required
 def reorder_columns():
     try:
-        data = request.json
-        ordered_ids = data.get('ordered_ids', [])
+        data = request.json; ordered_ids = data.get('ordered_ids', [])
         for index, col_id_str in enumerate(ordered_ids):
-            try:
-                col_id = int(col_id_str)
-            except (ValueError, TypeError):
-                print(f"ID de columna inválido encontrado y omitido: {col_id_str}")
-                continue
+            try: col_id = int(col_id_str)
+            except (ValueError, TypeError): continue
             columna = db_session.get(ColumnaLM, col_id)
-            if columna:
-                columna.orden = index
-        db_session.commit()
-        log_activity("Reordenar Columnas LM", f"Nuevo orden guardado.", "ADMIN", "Datos", "Info")
+            if columna: columna.orden = index
+        db_session.commit(); log_activity("Reordenar Columnas LM", "Nuevo orden guardado.", "ADMIN")
         return jsonify({'status': 'success', 'message': 'Orden de columnas guardado.'})
     except Exception as e:
-        db_session.rollback()
-        print(f"Error al reordenar columnas: {e}")
+        db_session.rollback(); print(f"Error al reordenar columnas: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/programa_lm/edit_row/<int:orden_id>', methods=['POST'])
@@ -853,38 +670,45 @@ def reorder_columns():
 @permission_required('programa_lm.admin')
 @csrf_required
 def edit_row_lm(orden_id):
-    """
-    Actualiza los datos base de una orden de trabajo.
-    """
     try:
         orden = db_session.query(OrdenLM).get(orden_id)
-        if not orden:
-            flash("La orden que intentas editar no existe.", "danger")
-            return redirect(url_for('programa_lm'))
-
-        new_wip = request.form.get('wip_order')
-        new_item = request.form.get('item')
-        new_qty = request.form.get('qty')
-        
-        # Validar si el nuevo WIP order ya existe y no es el de la orden actual
+        if not orden: flash("La orden que intentas editar no existe.", "danger"); return redirect(url_for('programa_lm'))
+        new_wip = request.form.get('wip_order'); new_item = request.form.get('item'); new_qty = request.form.get('qty')
         existing_order = db_session.query(OrdenLM).filter(OrdenLM.wip_order == new_wip).first()
         if existing_order and existing_order.id != orden_id:
-            flash(f"El WIP Order '{new_wip}' ya pertenece a otra orden.", "danger")
-            return redirect(url_for('programa_lm'))
-            
-        orden.wip_order = new_wip
-        orden.item = new_item
-        orden.qty = int(new_qty)
-        
-        db_session.commit()
-        log_activity("Edición Fila LM", f"Orden WIP '{new_wip}' (ID: {orden_id}) actualizada.", "ADMIN", "Datos", "Info")
+            flash(f"El WIP Order '{new_wip}' ya pertenece a otra orden.", "danger"); return redirect(url_for('programa_lm'))
+        orden.wip_order = new_wip; orden.item = new_item; orden.qty = int(new_qty)
+        db_session.commit(); log_activity("Edición Fila LM", f"Orden WIP '{new_wip}' (ID: {orden_id}) actualizada.", "ADMIN")
         flash("Orden actualizada correctamente.", "success")
-        
     except Exception as e:
-        db_session.rollback()
-        flash(f"Error al editar la orden: {e}", "danger")
-    
+        db_session.rollback(); flash(f"Error al editar la orden: {e}", "danger")
     return redirect(url_for('programa_lm'))
+
+@app.route('/programa_lm/update_cell', methods=['POST'])
+@login_required
+@permission_required('programa_lm.edit', 'programa_lm.admin')
+@csrf_required
+def update_cell_lm():
+    try:
+        data = request.json; orden_id, columna_id = int(data.get('orden_id')), int(data.get('columna_id'))
+        valor, estilos_dict = data.get('valor', None), data.get('estilos_css', None)
+        columna = db_session.get(ColumnaLM, columna_id)
+        if not columna: return jsonify({'status': 'error', 'message': 'Columna no encontrada'}), 404
+        if 'programa_lm.admin' not in session['permissions'] and not columna.editable_por_lm:
+            return jsonify({'status': 'error', 'message': 'No tienes permiso para editar esta celda.'}), 403
+        celda = db_session.query(DatoCeldaLM).filter_by(orden_id=orden_id, columna_id=columna_id).first()
+        if not celda and ((valor is not None and valor.strip() != '') or (estilos_dict and estilos_dict != {})):
+            celda = DatoCeldaLM(orden_id=orden_id, columna_id=columna_id); db_session.add(celda)
+        if celda:
+            if valor is not None: celda.valor = valor.strip()
+            if estilos_dict is not None: celda.estilos_css = json.dumps(estilos_dict) if estilos_dict else None
+            if not celda.valor and not celda.estilos_css:
+                db_session.delete(celda); log_activity("Limpieza Celda LM", f"Celda vacía eliminada para Orden ID: {orden_id}, Col ID: {columna_id}")
+            else: log_activity("Edición Celda LM", f"Orden ID: {orden_id}, Col: {columna.nombre}, Valor: '{celda.valor}', Estilos: '{celda.estilos_css}'")
+        db_session.commit(); return jsonify({'status': 'success', 'message': 'Celda actualizada'})
+    except Exception as e:
+        db_session.rollback(); print(f"Error al actualizar celda: {e}"); log_activity("Error Celda LM", f"Error al actualizar: {e}", "Sistema", "Error")
+        return jsonify({'status': 'error', 'message': f'Error del servidor: {str(e)}'}), 500
 
 @app.route('/programa_lm/add_row', methods=['POST'])
 @login_required
@@ -896,8 +720,7 @@ def add_row_lm():
     elif db_session.query(OrdenLM).filter_by(wip_order=wip_order).first(): flash(f"La orden WIP '{wip_order}' ya existe.", "warning")
     else:
         db_session.add(OrdenLM(wip_order=wip_order, item=item, qty=qty)); db_session.commit()
-        log_activity("Creación Fila LM", f"Nueva orden WIP creada: {wip_order}", "ADMIN", "Datos", "Info")
-        flash("Nueva orden agregada exitosamente.", "success")
+        log_activity("Creación Fila LM", f"Nueva orden WIP creada: {wip_order}", "ADMIN"); flash("Nueva orden agregada exitosamente.", "success")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/add_column', methods=['POST'])
@@ -910,8 +733,7 @@ def add_column_lm():
     elif db_session.query(ColumnaLM).filter_by(nombre=nombre_columna).first(): flash(f"La columna '{nombre_columna}' ya existe.", "warning")
     else:
         db_session.add(ColumnaLM(nombre=nombre_columna, editable_por_lm=True)); db_session.commit()
-        log_activity("Creación Columna LM", f"Nueva columna creada: {nombre_columna}", "ADMIN", "Datos", "Info")
-        flash("Nueva columna agregada exitosamente.", "success")
+        log_activity("Creación Columna LM", f"Nueva columna creada: {nombre_columna}", "ADMIN"); flash("Nueva columna agregada exitosamente.", "success")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/delete_row/<int:orden_id>', methods=['POST'])
@@ -919,25 +741,15 @@ def add_column_lm():
 @permission_required('programa_lm.admin')
 @csrf_required
 def delete_row_lm(orden_id):
-    """
-    Elimina una orden de trabajo completa y todos sus datos de celda asociados.
-    """
     try:
         orden = db_session.query(OrdenLM).get(orden_id)
         if orden:
-            wip_order = orden.wip_order
-            # Gracias a cascade='all, delete-orphan' en el modelo,
-            # todos los DatoCeldaLM asociados se borrarán automáticamente.
-            db_session.delete(orden)
-            db_session.commit()
+            wip_order = orden.wip_order; db_session.delete(orden); db_session.commit()
             log_activity("Eliminación Fila LM", f"Orden WIP '{wip_order}' (ID: {orden_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
             flash(f"La orden '{wip_order}' ha sido eliminada.", "success")
-        else:
-            flash("La orden que intentas eliminar no existe.", "danger")
+        else: flash("La orden que intentas eliminar no existe.", "danger")
     except Exception as e:
-        db_session.rollback()
-        flash(f"Error al eliminar la orden: {e}", "danger")
-        
+        db_session.rollback(); flash(f"Error al eliminar la orden: {e}", "danger")
     return redirect(url_for('programa_lm'))
 
 @app.route('/programa_lm/delete_column/<int:columna_id>', methods=['POST'])
@@ -947,24 +759,15 @@ def delete_row_lm(orden_id):
 def delete_column_lm(columna_id):
     try:
         columna_a_eliminar = db_session.get(ColumnaLM, columna_id)
-        
         if columna_a_eliminar:
-            nombre_columna = columna_a_eliminar.nombre
-            db_session.delete(columna_a_eliminar)
-            db_session.commit()
-            
+            nombre_columna = columna_a_eliminar.nombre; db_session.delete(columna_a_eliminar); db_session.commit()
             log_activity("Eliminación Columna LM", f"Columna '{nombre_columna}' (ID: {columna_id}) eliminada.", "ADMIN", "Seguridad", "Critical")
             flash(f"La columna '{nombre_columna}' y todos sus datos han sido eliminados exitosamente.", "success")
-        else:
-            flash("La columna que intentas eliminar no existe.", "danger")
-            
+        else: flash("La columna que intentas eliminar no existe.", "danger")
     except exc.SQLAlchemyError as e:
-        db_session.rollback()
-        flash(f"Error al eliminar la columna: {e}", "danger")
+        db_session.rollback(); flash(f"Error al eliminar la columna: {e}", "danger")
         log_activity("Error Eliminación Columna LM", f"Error al intentar borrar columna ID {columna_id}: {e}", "ADMIN", "Error", "Critical")
-
     return redirect(url_for('programa_lm'))
-
 
 @app.route('/centro_acciones')
 @login_required
@@ -976,13 +779,25 @@ def centro_acciones():
     elif any(arg in request.args for arg in ['fecha_inicio', 'fecha_fin', 'grupo', 'tipo', 'status']):
         filtros = {'fecha_inicio': request.args.get('fecha_inicio'), 'fecha_fin': request.args.get('fecha_fin'), 'grupo': request.args.get('grupo'), 'tipo': request.args.get('tipo', 'Todos'), 'status': request.args.get('status', 'Pendientes')}
     session['acciones_filtros'] = filtros
-    items, query_desviaciones, query_solicitudes = [], db_session.query(Pronostico, Usuario.nombre_completo).join(Usuario, Pronostico.usuario_razon == Usuario.username, isouter=True).filter(Pronostico.razon_desviacion.isnot(None), Pronostico.razon_desviacion != ''), db_session.query(SolicitudCorreccion, Usuario.nombre_completo).join(Usuario, SolicitudCorreccion.usuario_solicitante == Usuario.username, isouter=True)
-    if filtros.get('fecha_inicio'): query_desviaciones = query_desviaciones.filter(Pronostico.fecha >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date()); query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
-    if filtros.get('fecha_fin'): query_desviaciones = query_desviaciones.filter(Pronostico.fecha <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date()); query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
-    if filtros.get('grupo') and filtros.get('grupo') != 'Todos': query_desviaciones = query_desviaciones.filter(Pronostico.grupo == filtros['grupo']); query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.grupo == filtros['grupo'])
+    items = []
+    query_desviaciones = db_session.query(Pronostico, Usuario.nombre_completo).join(Usuario, Pronostico.usuario_razon == Usuario.username, isouter=True).filter(Pronostico.razon_desviacion.isnot(None), Pronostico.razon_desviacion != '')
+    query_solicitudes = db_session.query(SolicitudCorreccion, Usuario.nombre_completo).join(Usuario, SolicitudCorreccion.usuario_solicitante == Usuario.username, isouter=True)
+    if filtros.get('fecha_inicio'):
+        query_desviaciones = query_desviaciones.filter(Pronostico.fecha >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
+        query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema >= datetime.strptime(filtros['fecha_inicio'], '%Y-%m-%d').date())
+    if filtros.get('fecha_fin'):
+        query_desviaciones = query_desviaciones.filter(Pronostico.fecha <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
+        query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.fecha_problema <= datetime.strptime(filtros['fecha_fin'], '%Y-%m-%d').date())
+    if filtros.get('grupo') and filtros.get('grupo') != 'Todos':
+        query_desviaciones = query_desviaciones.filter(Pronostico.grupo == filtros['grupo'])
+        query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.grupo == filtros['grupo'])
     status_filter = filtros.get('status')
-    if status_filter == 'Pendientes': query_desviaciones, query_solicitudes = query_desviaciones.filter(Pronostico.status == 'Nuevo'), query_solicitudes.filter(SolicitudCorreccion.status == 'Pendiente')
-    elif status_filter and status_filter != 'Todos': query_desviaciones, query_solicitudes = query_desviaciones.filter(Pronostico.status == status_filter), query_solicitudes.filter(SolicitudCorreccion.status == status_filter)
+    if status_filter == 'Pendientes':
+        query_desviaciones = query_desviaciones.filter(Pronostico.status == 'Nuevo')
+        query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.status == 'Pendiente')
+    elif status_filter and status_filter != 'Todos':
+        query_desviaciones = query_desviaciones.filter(Pronostico.status == status_filter)
+        query_solicitudes = query_solicitudes.filter(SolicitudCorreccion.status == status_filter)
     if filtros.get('tipo', 'Todos') in ['Todos', 'Desviacion']:
         for d, nombre in query_desviaciones.all(): items.append({'id': d.id, 'tipo': 'Desviación', 'timestamp': d.fecha_razon, 'fecha_evento': d.fecha, 'grupo': d.grupo, 'area': d.area, 'turno': d.turno, 'usuario': nombre or d.usuario_razon, 'detalles': d.razon_desviacion, 'status': d.status})
     if filtros.get('tipo', 'Todos') in ['Todos', 'Correccion']:
@@ -998,8 +813,7 @@ def solicitar_correccion():
     try:
         db_session.add(SolicitudCorreccion(usuario_solicitante=session.get('username'), fecha_problema=datetime.strptime(request.form.get('fecha_problema'), '%Y-%m-%d').date(), grupo=request.form.get('grupo'), area=request.form.get('area'), turno=request.form.get('turno'), tipo_error=request.form.get('tipo_error'), descripcion=request.form.get('descripcion')))
         log_activity(f"Solicitud Corrección ({request.form.get('tipo_error')})", f"Area: {request.form.get('area')}, Turno: {request.form.get('turno')}", request.form.get('grupo'), 'Datos', 'Warning')
-        db_session.commit()
-        return jsonify({'status': 'success', 'message': 'Tu solicitud ha sido enviada.'})
+        db_session.commit(); return jsonify({'status': 'success', 'message': 'Tu solicitud ha sido enviada.'})
     except Exception as e:
         db_session.rollback(); return jsonify({'status': 'error', 'message': f'Ocurrió un error: {e}'}), 500
 
@@ -1008,7 +822,7 @@ def solicitar_correccion():
 @permission_required('actions.center')
 @csrf_required
 def update_reason_status(reason_id):
-    reason = db_session.query(Pronostico).get(reason_id)
+    reason = db_session.get(Pronostico, reason_id)
     if reason and request.form.get('status'):
         old, new = reason.status, request.form.get('status'); reason.status = new
         log_activity("Cambio Estado (Desviación)", f"ID Razón: {reason.id}. Estado: '{old}' -> '{new}'.", reason.grupo, 'Datos', 'Info')
@@ -1021,9 +835,9 @@ def update_reason_status(reason_id):
 @permission_required('actions.center')
 @csrf_required
 def update_solicitud_status(solicitud_id):
-    solicitud = db_session.query(SolicitudCorreccion).get(solicitud_id)
+    solicitud = db_session.get(SolicitudCorreccion, solicitud_id)
     if solicitud:
-        solicitud.status, solicitud.admin_username, solicitud.admin_notas, solicitud.fecha_resolucion = request.form.get('status'), session.get('username'), request.form.get('admin_notas'), datetime.utcnow()
+        solicitud.status = request.form.get('status'); solicitud.admin_username = session.get('username'); solicitud.admin_notas = request.form.get('admin_notas'); solicitud.fecha_resolucion = datetime.utcnow()
         log_activity("Cambio Estado (Corrección)", f"ID Solicitud: {solicitud.id}. Estado: '{solicitud.status}' -> '{request.form.get('status')}'.", solicitud.grupo, 'Datos', 'Info')
         db_session.commit(); flash('Estado de la solicitud actualizado.', 'success')
     else: flash('No se encontró la solicitud.', 'danger')
@@ -1035,43 +849,21 @@ def update_solicitud_status(solicitud_id):
 @csrf_required
 def manage_users():
     if request.method == 'POST' and request.form.get('form_type') == 'create_user':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        role_id = request.form.get('role_id')
-        turno_id = request.form.get('turno_id') # Puede venir vacío
-        nombre = request.form.get('nombre_completo')
-        cargo = request.form.get('cargo')
-
-        if not all([username, password, role_id, nombre, cargo]):
-            flash('Todos los campos son obligatorios, excepto el turno.', 'warning')
-        elif db_session.query(Usuario).filter_by(username=username).first():
-            flash(f"El usuario '{username}' ya existe.", 'danger')
+        username, password, role_id, turno_id, nombre, cargo = request.form.get('username'), request.form.get('password'), request.form.get('role_id'), request.form.get('turno_id'), request.form.get('nombre_completo'), request.form.get('cargo')
+        if not all([username, password, role_id, nombre, cargo]): flash('Todos los campos son obligatorios, excepto el turno.', 'warning')
+        elif db_session.query(Usuario).filter_by(username=username).first(): flash(f"El usuario '{username}' ya existe.", 'danger')
         else:
-            # --- LÓGICA MODIFICADA ---
-            # Si no se seleccionó un turno, asignamos 'N/A' por defecto
-            if not turno_id:
-                na_turno = db_session.query(Turno).filter_by(nombre='N/A').one()
-                turno_id_to_save = na_turno.id
-            else:
-                turno_id_to_save = int(turno_id)
-            
-            # Creamos el usuario con un turno garantizado
-            db_session.add(Usuario(username=username, password=password, role_id=role_id, nombre_completo=nombre, cargo=cargo, turno_id=turno_id_to_save))
-            db_session.commit()
-            # --- FIN DE LA LÓGICA MODIFICADA ---
-
-            rol = db_session.query(Rol).get(role_id)
+            turno_id_to_save = int(turno_id) if turno_id else db_session.query(Turno).filter_by(nombre='N/A').one().id
+            db_session.add(Usuario(username=username, password=password, role_id=role_id, nombre_completo=nombre, cargo=cargo, turno_id=turno_id_to_save)); db_session.commit()
+            rol = db_session.get(Rol, role_id)
             log_activity("Creación de usuario", f"Usuario '{username}' ({nombre}) creado con rol '{rol.nombre}'.", 'ADMIN', 'Seguridad', 'Info')
             flash(f"Usuario '{username}' creado exitosamente.", 'success')
         return redirect(url_for('manage_users'))
-    
-    # El resto de la función (la parte del GET) no cambia...
     if request.args.get('limpiar'): session.pop('user_filtros', None); return redirect(url_for('manage_users'))
-    filtros, query = {}, db_session.query(Usuario).join(Rol).outerjoin(Turno)
+    filtros = session.get('user_filtros', {})
     if any(arg in request.args for arg in ['username', 'nombre_completo', 'role_id', 'turno_id']):
-        filtros = {'username': request.args.get('username', ''), 'nombre_completo': request.args.get('nombre_completo', ''), 'role_id': request.args.get('role_id', ''), 'turno_id': request.args.get('turno_id', '')}
-        session['user_filtros'] = filtros
-    elif 'user_filtros' in session: filtros = session.get('user_filtros', {})
+        filtros = {k: request.args.get(k, '') for k in ['username', 'nombre_completo', 'role_id', 'turno_id']}; session['user_filtros'] = filtros
+    query = db_session.query(Usuario).join(Rol).outerjoin(Turno)
     if filtros.get('username'): query = query.filter(Usuario.username.ilike(f"%{filtros['username']}%"))
     if filtros.get('nombre_completo'): query = query.filter(Usuario.nombre_completo.ilike(f"%{filtros['nombre_completo']}%"))
     if filtros.get('role_id'): query = query.filter(Rol.id == filtros['role_id'])
@@ -1086,40 +878,19 @@ def manage_users():
 @csrf_required
 def edit_user(user_id):
     user = db_session.get(Usuario, user_id)
-    if not user:
-        abort(404)
+    if not user: abort(404)
     if request.method == 'POST':
         new_username = request.form.get('username')
-        if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first():
-            flash(f"El usuario '{new_username}' ya existe.", 'danger')
+        if new_username != user.username and db_session.query(Usuario).filter_by(username=new_username).first(): flash(f"El usuario '{new_username}' ya existe.", 'danger')
         else:
-            user.username = new_username
-            user.nombre_completo = request.form.get('nombre_completo')
-            user.cargo = request.form.get('cargo')
-            user.role_id = request.form.get('role_id')
-            
-            # Asignamos 'N/A' si no se selecciona un turno
-            turno_id_str = request.form.get('turno_id')
-            if turno_id_str:
-                user.turno_id = int(turno_id_str)
-            else:
-                na_turno = db_session.query(Turno).filter_by(nombre='N/A').one()
-                user.turno_id = na_turno.id
-
-            if request.form.get('password'):
-                user.password_hash = generate_password_hash(request.form.get('password'))
-            
+            user.username = new_username; user.nombre_completo = request.form.get('nombre_completo'); user.cargo = request.form.get('cargo'); user.role_id = request.form.get('role_id')
+            user.turno_id = int(request.form.get('turno_id')) if request.form.get('turno_id') else db_session.query(Turno).filter_by(nombre='N/A').one().id
+            if request.form.get('password'): user.password_hash = generate_password_hash(request.form.get('password'))
             try:
-                db_session.commit()
-                log_activity("Edición de usuario", f"Datos del usuario ID {user.id} ({user.username}) actualizados.", 'ADMIN', 'Seguridad', 'Warning')
-                flash('Usuario actualizado correctamente.', 'success')
-                return redirect(url_for('manage_users'))
-            except exc.IntegrityError as e:
-                db_session.rollback()
-                flash(f"Error de integridad: {e}", 'danger')
-
-    all_roles = db_session.query(Rol).order_by(Rol.nombre).all()
-    all_turnos = db_session.query(Turno).order_by(Turno.nombre).all()
+                db_session.commit(); log_activity("Edición de usuario", f"Datos del usuario ID {user.id} ({user.username}) actualizados.", 'ADMIN', 'Seguridad', 'Warning')
+                flash('Usuario actualizado correctamente.', 'success'); return redirect(url_for('manage_users'))
+            except exc.IntegrityError as e: db_session.rollback(); flash(f"Error de integridad: {e}", 'danger')
+    all_roles = db_session.query(Rol).order_by(Rol.nombre).all(); all_turnos = db_session.query(Turno).order_by(Turno.nombre).all()
     return render_template('edit_user.html', user=user, all_roles=all_roles, all_turnos=all_turnos)
 
 @app.route('/delete_user/<int:user_id>', methods=['POST'])
@@ -1129,7 +900,7 @@ def edit_user(user_id):
 def delete_user(user_id):
     if user_id == session.get('user_id'): flash('No puedes eliminar tu propia cuenta.', 'danger')
     else:
-        user = db_session.query(Usuario).get(user_id)
+        user = db_session.get(Usuario, user_id)
         if user:
             log_activity("Eliminación de usuario", f"Usuario '{user.username}' (ID: {user_id}) fue eliminado.", 'ADMIN', 'Seguridad', 'Critical')
             db_session.delete(user); db_session.commit(); flash('Usuario eliminado exitosamente.', 'success')
@@ -1174,11 +945,12 @@ def manage_roles():
 @permission_required('roles.manage')
 @csrf_required
 def delete_role(role_id):
-    rol = db_session.query(Rol).get(role_id)
+    rol = db_session.get(Rol, role_id)
     if rol:
         if rol.usuarios: flash(f"No se puede eliminar el rol '{rol.nombre}' porque tiene usuarios asignados.", 'danger')
-        elif rol.nombre in ['ADMIN', 'IHP', 'FHP']: flash(f"No se puede eliminar el rol de sistema '{rol.nombre}'.", 'danger')
-        else: flash(f"Rol '{rol.nombre}' eliminado.", 'success'); db_session.delete(rol); db_session.commit()
+        elif rol.nombre in ['ADMIN', 'IHP', 'FHP', 'PROGRAMA_LM']: flash(f"No se puede eliminar el rol de sistema '{rol.nombre}'.", 'danger')
+        else:
+            db_session.delete(rol); db_session.commit(); flash(f"Rol '{rol.nombre}' eliminado.", 'success')
     else: flash("El rol no existe.", 'danger')
     return redirect(url_for('manage_roles'))
 
@@ -1191,8 +963,7 @@ def manage_turnos():
         nombre = request.form.get('nombre')
         if nombre:
             if not db_session.query(Turno).filter_by(nombre=nombre).first():
-                db_session.add(Turno(nombre=nombre)); db_session.commit()
-                flash(f"Turno '{nombre}' creado exitosamente.", 'success')
+                db_session.add(Turno(nombre=nombre)); db_session.commit(); flash(f"Turno '{nombre}' creado exitosamente.", 'success')
             else: flash(f"El turno '{nombre}' ya existe.", 'danger')
     turnos = db_session.query(Turno).order_by(Turno.nombre).all()
     return render_template('manage_turnos.html', turnos=turnos)
@@ -1202,37 +973,31 @@ def manage_turnos():
 @permission_required('users.manage')
 @csrf_required
 def delete_turno(turno_id):
-    turno = db_session.query(Turno).get(turno_id)
+    turno = db_session.get(Turno, turno_id)
     if turno:
         if turno.usuarios: flash(f"No se puede eliminar el turno '{turno.nombre}' porque tiene usuarios asignados.", 'danger')
-        else: flash(f"Turno '{turno.nombre}' eliminado.", 'success'); db_session.delete(turno); db_session.commit()
+        else:
+            db_session.delete(turno); db_session.commit(); flash(f"Turno '{turno.nombre}' eliminado.", 'success')
     else: flash("El turno no existe.", 'danger')
     return redirect(url_for('manage_turnos'))
 
-# Nueva ruta para gestionar permisos por rol
 @app.route('/manage_permissions/<int:role_id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('roles.manage')
 @csrf_required
 def manage_permissions(role_id):
     rol = db_session.query(Rol).options(joinedload(Rol.permissions)).get(role_id)
-    if not rol:
-        flash("El rol especificado no existe.", "danger")
-        return redirect(url_for('manage_roles'))
+    if not rol: flash("El rol especificado no existe.", "danger"); return redirect(url_for('manage_roles'))
     if request.method == 'POST':
-        if rol.nombre == 'ADMIN':
-            flash("Los permisos del rol ADMIN no se pueden modificar.", "danger")
-            return redirect(url_for('manage_roles'))
+        if rol.nombre == 'ADMIN': flash("Los permisos del rol ADMIN no se pueden modificar.", "danger"); return redirect(url_for('manage_roles'))
         selected_permission_ids = request.form.getlist('permissions')
         selected_permissions = db_session.query(Permission).filter(Permission.id.in_(selected_permission_ids)).all()
-        rol.permissions = selected_permissions
-        db_session.commit()
+        rol.permissions = selected_permissions; db_session.commit()
         log_activity("Actualización de Permisos", f"Permisos actualizados para el rol '{rol.nombre}'.", 'ADMIN', 'Seguridad', 'Warning')
         flash(f"Permisos para el rol '{rol.nombre}' actualizados correctamente.", "success")
         return redirect(url_for('manage_roles'))
     all_permissions = db_session.query(Permission).order_by(Permission.name).all()
-    if rol.nombre == 'ADMIN':
-        flash('Los permisos del rol ADMIN no son editables para garantizar la estabilidad del sistema.', 'info')
+    if rol.nombre == 'ADMIN': flash('Los permisos del rol ADMIN no son editables para garantizar la estabilidad del sistema.', 'info')
     return render_template('manage_permissions.html', rol=rol, all_permissions=all_permissions)
 
 if __name__ == '__main__':
