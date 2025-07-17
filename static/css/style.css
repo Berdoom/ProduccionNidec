@@ -30,35 +30,28 @@ body {
     color: var(--text-dark);
 }
 
+/* --- Layout de dos barras --- */
 .header {
     background-color: var(--white);
-    padding: 1rem 1.5rem;
+    color: var(--text-dark);
+    padding: 0.75rem 1.5rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     border-bottom: 1px solid var(--border-color);
 }
-
-.nidec-navbar {
-    background-color: var(--nidec-green);
-    border-bottom: 3px solid var(--nidec-green-dark);
-}
-
-.navbar-dark .navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 500;
-    transition: background-color 0.2s ease;
-    padding: 0.5rem 1rem;
-    border-radius: 0.25rem;
-}
-
+.header .page-header-text { font-weight: 500; }
+.header .user-info { color: var(--text-muted); font-weight: 500; }
+.header .user-info strong { color: var(--text-dark); }
+.btn-logout { background-color: #dc3545; color: white !important; border: none; border-radius: 0.25rem; padding: 0.4rem 0.8rem; font-weight: 500; transition: background-color 0.2s ease; }
+.btn-logout:hover { background-color: #c82333; color: white; text-decoration: none; }
+.nidec-navbar { background-color: var(--nidec-green); }
+.navbar-dark .navbar-nav .nav-link { color: rgba(255, 255, 255, 0.9); font-weight: 500; transition: background-color 0.2s ease; padding: 0.5rem 1rem; border-radius: 0.25rem; }
 .navbar-dark .navbar-nav .nav-item.active .nav-link,
 .navbar-dark .navbar-nav .nav-link:hover,
-.navbar-dark .navbar-nav .show > .nav-link {
-    color: var(--white);
-    background-color: rgba(0, 0, 0, 0.15);
-}
+.navbar-dark .navbar-nav .show > .nav-link { color: var(--white); background-color: rgba(0, 0, 0, 0.15); }
+.notification-bell { position: relative; font-size: 1.2rem; }
+.notification-badge { position: absolute; top: -5px; right: -8px; font-size: 0.6em; padding: 0.2em 0.45em; border-radius: 50%; }
 
 .content-section {
     background-color: var(--white);
@@ -68,7 +61,58 @@ body {
     margin-bottom: 25px;
 }
 
-/* --- ESTILOS DE BOTONES UNIFICADOS CON VERDE --- */
+/* ==========================================================================
+   ESTILOS DEL LOGIN (RESTAURADOS Y CORREGIDOS)
+   ========================================================================== */
+.login-page-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 90vh;
+}
+.login-form-container {
+    max-width: 450px;
+    width: 100%;
+    background: var(--white);
+    padding: 3rem;
+    border-radius: 12px;
+    border-top: 5px solid var(--nidec-green);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    text-align: center;
+}
+.login-form-container .logo {
+    max-width: 70%;
+    margin-bottom: 1.5rem;
+}
+.login-form-container h2 {
+    font-weight: 600;
+    margin-bottom: 2rem;
+}
+.login-form-container .form-control {
+    padding: 1rem; /* Un padding más estándar */
+    border-radius: 8px;
+}
+.login-form-container .form-control:focus {
+    border-color: var(--nidec-green);
+    box-shadow: 0 0 0 0.2rem rgba(36, 184, 23, 0.25);
+}
+.btn-nidec-login {
+    background-color: var(--nidec-green);
+    border-color: var(--nidec-green);
+    color: var(--white) !important;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+.btn-nidec-login:hover {
+    background-color: var(--nidec-green-dark);
+    border-color: var(--nidec-green-dark);
+}
+
+/* ==========================================================================
+   ESTILOS GENERALES DE BOTONES
+   ========================================================================== */
 .btn-nidec-style {
     background-color: var(--nidec-green);
     border-color: var(--nidec-green);
@@ -79,90 +123,66 @@ body {
 .btn-nidec-style:hover {
     background-color: var(--nidec-green-dark);
     border-color: var(--nidec-green-dark);
-    color: white;
 }
 .btn-nidec-style .fas {
     margin-right: 0.5rem;
 }
 
-/* --- Login --- */
-.login-page-container { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
-.login-form-container { max-width: 450px; width: 100%; background: var(--white); padding: 3rem; border-radius: 12px; border-top: 5px solid var(--nidec-green); box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
-.login-form-container .logo { max-width: 70%; margin-bottom: 1.5rem; }
-.login-form-container h2 { font-weight: 600; margin-bottom: 2rem; }
-.login-form-container .form-control:focus { border-color: var(--nidec-green); box-shadow: 0 0 0 0.2rem rgba(36, 184, 23, 0.25); }
-.btn-nidec { background-color: var(--nidec-green); border-color: var(--nidec-green); color: var(--white) !important; font-weight: 600; transition: all 0.2s ease; padding: 0.75rem; border-radius: 8px; }
-.btn-nidec:hover { background-color: var(--nidec-green-dark); border-color: var(--nidec-green-dark); }
 
-
-/* ==========================================================================
-   NUEVOS ESTILOS PARA DASHBOARD (RUEDAS DE PROGRESO)
-   ========================================================================== */
-
-.kpi-wheel-card {
-    background-color: #fff;
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.07);
-    text-align: center;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.kpi-wheel-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-}
-
-.circular-progress-kpi {
-    position: relative;
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    margin: 0 auto 1rem;
-}
-
-.circular-progress-kpi::before {
-    content: "";
-    position: absolute;
-    height: 84%;
-    width: 84%;
-    background-color: #fff;
-    border-radius: 50%;
-}
-
-.progress-value {
-    position: relative;
-    font-size: 2.5rem;
-    font-weight: 700;
-}
-
-/* Clases de color para las ruedas */
+/* --- KPIs y otros elementos --- */
+.kpi-wheel-card { background-color: #fff; padding: 1.5rem; border-radius: 0.75rem; box-shadow: 0 4px 15px rgba(0,0,0,0.07); text-align: center; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+.kpi-wheel-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+.circular-progress-kpi { position: relative; width: 150px; height: 150px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 1rem; }
+.circular-progress-kpi::before { content: ""; position: absolute; height: 84%; width: 84%; background-color: #fff; border-radius: 50%; }
+.progress-value { position: relative; font-size: 2.5rem; font-weight: 700; }
 .kpi-red { background: conic-gradient(var(--kpi-red) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
 .kpi-red .progress-value { color: var(--kpi-red); }
 .kpi-yellow { background: conic-gradient(var(--kpi-yellow) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
 .kpi-yellow .progress-value { color: var(--kpi-yellow); }
 .kpi-green { background: conic-gradient(var(--kpi-green) calc(var(--value) * 1%), var(--kpi-grey) 0deg); }
 .kpi-green .progress-value { color: var(--kpi-green); }
-.kpi-wheel-card h5 { font-weight: 600; color: #374151; margin-bottom: 0.25rem; }
-.kpi-wheel-card p.text-muted { color: #6b7280; font-size: 1rem; font-weight: 500; }
-
-/* --- Estilos para Notificaciones (Toasts) --- */
 .toast-container { position: fixed; top: 90px; right: 20px; z-index: 1055; }
 
+
 /* ==========================================================================
-   NUEVOS ESTILOS PARA LA PÁGINA DE CAPTURA
+   ESTILOS PARA DASHBOARD Y REGISTRO (VISTA MÓVIL)
    ========================================================================== */
-.total-cell-success, .turno-total-mobile.total-cell-success { background-color: var(--cell-green-bg) !important; color: var(--nidec-green-dark); }
-.total-cell-warning, .turno-total-mobile.total-cell-warning { background-color: var(--cell-yellow-bg) !important; color: #b45309; }
-.total-cell-danger, .turno-total-mobile.total-cell-danger { background-color: var(--cell-red-bg) !important; color: #b91c1c; }
 
-.input-success { border-color: var(--kpi-green) !important; background-color: var(--cell-green-bg) !important; }
-.input-warning { border-color: var(--kpi-yellow) !important; background-color: var(--cell-yellow-bg) !important; }
+/* Por defecto, la vista de escritorio está visible y la móvil oculta */
+.desktop-only-table { display: block; }
+.mobile-only-container { display: none; }
+
+/* En pantallas pequeñas (móviles)... */
+@media (max-width: 991.98px) {
+    /* ...si están en vertical, oculta la tabla y muestra el contenedor móvil. */
+    @media (orientation: portrait) {
+        .desktop-only-table { display: none; }
+        .mobile-only-container { display: block; }
+    }
+    /* Si están en horizontal, se aplica el comportamiento por defecto (tabla visible) */
+}
+
+/* Estilos de la tabla de resumen móvil */
+.mobile-summary-table { width: 100%; border-collapse: collapse; }
+.mobile-summary-table thead th { background-color: #e9ecef; font-size: 0.9rem; padding: 0.75rem 0.5rem; text-align: center; }
+.mobile-summary-table tbody td { padding: 0.75rem 0.5rem; border-bottom: 1px solid #dee2e6; font-size: 0.95rem; }
+.mobile-summary-table .area-name-cell { font-weight: 600; color: var(--text-dark); }
+.mobile-summary-table .efficiency-cell { text-align: center; font-weight: bold; border-radius: 4px; color: white; }
+
+/* Colores para la eficiencia en la tabla móvil */
+.eff-red { background-color: var(--kpi-red); }
+.eff-yellow { background-color: var(--kpi-yellow); color: #333 !important; }
+.eff-green { background-color: var(--kpi-green); }
+.eff-grey { background-color: #adb5bd; }
+
+/* Mensaje para girar el dispositivo */
+.rotate-device-prompt { display: flex; flex-direction: column; justify-content: center; align-items: center; color: var(--text-muted); padding: 2rem 1rem; background-color: #f8f9fa; border-radius: 0.5rem; margin-top: 1.5rem; text-align: center; }
+.phone-icon-container { margin-bottom: 1rem; }
+.phone-icon-container .phone-icon { font-size: 4rem; color: #adb5bd; animation: rotate-animation 2.5s ease-in-out infinite; }
+@keyframes rotate-animation { 0% { transform: rotate(0); } 30% { transform: rotate(0); } 50% { transform: rotate(90deg); } 80% { transform: rotate(90deg); } 100% { transform: rotate(0); } }
 
 /* ==========================================================================
-   ESTILOS PARA LA VISTA MÓVIL DE CAPTURA (MEJORADA)
+   ESTILOS PARA VISTA MÓVIL DE CAPTURA
    ========================================================================== */
 .mobile-capture-card {
     background-color: #fff;
@@ -172,361 +192,33 @@ body {
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     overflow: hidden;
 }
+.mobile-capture-card .card-header { background-color: #f8f9fa; padding: 0; border-bottom: 1px solid var(--border-color); }
+.mobile-capture-card .btn-link { width: 100%; text-align: left; padding: 1rem 1.25rem; font-weight: 600; color: var(--text-dark); text-decoration: none; font-size: 1.1rem; }
+.mobile-capture-card .btn-link:hover { background-color: #e9ecef; }
+.mobile-capture-card .card-body { padding: 0; }
+.turno-section-mobile { padding: 1rem 1.25rem; border-bottom: 1px solid #e9ecef; }
+.turno-section-mobile:last-child { border-bottom: none; }
+.turno-header-mobile { font-weight: 600; font-size: 1.05rem; color: var(--nidec-green-dark); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--nidec-green); }
+.capture-row-mobile { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; }
+.capture-row-mobile label { margin-bottom: 0; font-weight: 500; }
+.capture-row-mobile input[type="number"] { width: 100px; text-align: right; }
+.turno-total-mobile { font-weight: bold; font-size: 1.1rem; margin-top: 0.5rem; padding: 0.75rem 0; border-top: 1px solid var(--border-color); }
+.input-success { border-color: var(--kpi-green) !important; background-color: var(--cell-green-bg) !important; }
+.input-warning { border-color: var(--kpi-yellow) !important; background-color: var(--cell-yellow-bg) !important; }
 
-.mobile-capture-card .card-header {
-    background-color: #f8f9fa;
-    padding: 0;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.mobile-capture-card .btn-link {
-    width: 100%;
-    text-align: left;
-    padding: 1rem 1.25rem;
-    font-weight: 600;
-    color: var(--text-dark);
-    text-decoration: none;
-    font-size: 1.1rem;
-}
-
-.mobile-capture-card .btn-link:hover {
-    background-color: #e9ecef;
-}
-
-.mobile-capture-card .card-body {
-    padding: 0;
-}
-
-.turno-section-mobile {
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid #e9ecef;
-}
-.turno-section-mobile:last-child {
-    border-bottom: none;
-}
-
-.turno-header-mobile {
-    font-weight: 600;
-    font-size: 1.05rem;
-    color: var(--nidec-green-dark);
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid var(--nidec-green);
-}
-
-.capture-row-mobile {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-}
-
-.capture-row-mobile label {
-    margin-bottom: 0;
-    font-weight: 500;
-}
-
-.capture-row-mobile input[type="number"] {
-    width: 100px;
-    text-align: right;
-}
-
-.turno-total-mobile {
-    font-weight: bold;
-    font-size: 1.1rem;
-    margin-top: 0.5rem;
-    padding: 0.75rem 0;
-    border-top: 1px solid var(--border-color);
-}
-
-/* ==========================================================================
-   LÓGICA DE VISIBILIDAD PARA MÓVIL Y ESCRITORIO (VERSIÓN FINAL)
-   ========================================================================== */
-
-/*
-  Por defecto (en pantallas grandes/escritorio), se muestra la tabla completa
-  y la vista móvil está completamente oculta.
-*/
-.desktop-only-table {
-    display: block;
-}
-.mobile-only-container {
-    display: none;
-}
-
-/*
-  En pantallas pequeñas (como teléfonos), la lógica cambia.
-*/
-@media (max-width: 991px) {
-    .desktop-only-table {
-        display: none;
-    }
-    .mobile-only-container {
-        display: block;
-    }
-    @media (orientation: landscape) {
-        .mobile-only-container {
-            display: none;
-        }
-        .desktop-only-table {
-            display: block;
-        }
-    }
-}
-
-/* ==========================================================================
-   NUEVOS ESTILOS PARA LA TABLA DE RESUMEN MÓVIL
-   ========================================================================== */
-.mobile-summary-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.mobile-summary-table thead th {
-    background-color: #e9ecef;
-    font-size: 0.9rem;
-    padding: 0.75rem 0.5rem;
-    text-align: center;
-}
-
-.mobile-summary-table tbody td {
-    padding: 0.75rem 0.5rem;
-    border-bottom: 1px solid #dee2e6;
-    font-size: 0.95rem;
-}
-
-.mobile-summary-table .area-name-cell {
-    font-weight: 600;
-    color: var(--text-dark);
-}
-
-.mobile-summary-table .efficiency-cell {
-    text-align: center;
-    font-weight: bold;
-    border-radius: 4px;
-    color: white;
-}
-
-/* Clases de color para la eficiencia */
-.eff-red { background-color: var(--kpi-red); }
-.eff-yellow { background-color: var(--kpi-yellow); color: #333 !important; }
-.eff-green { background-color: var(--kpi-green); }
-.eff-grey { background-color: #adb5bd; }
-
-.rotate-device-prompt {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    color: var(--text-muted);
-    padding: 2rem 1rem;
-    background-color: #f8f9fa;
-    border-radius: 0.5rem;
-    margin-top: 1.5rem;
-    text-align: center;
-}
-
-.phone-icon-container {
-    margin-bottom: 1rem;
-}
-
-.phone-icon-container .phone-icon {
-    font-size: 4rem;
-    color: #adb5bd;
-    animation: rotate-animation 2.5s ease-in-out infinite;
-}
-
-@keyframes rotate-animation {
-    0% { transform: rotate(0); }
-    30% { transform: rotate(0); }
-    50% { transform: rotate(-90deg); }
-    80% { transform: rotate(-90deg); }
-    100% { transform: rotate(0); }
-}
-
-
-/* --- OTROS ESTILOS --- */
-.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.shortfall-cell { background-color: #ffeeba !important; color: #856404 !important; font-weight: bold; }
-
-.table-responsive thead th { position: -webkit-sticky; position: sticky; top: 0; z-index: 2; background-color: #e9ecef; }
-.table-responsive tbody td:first-child { position: -webkit-sticky; position: sticky; left: 0; z-index: 3; background-color: #f8f9fa; }
-.table-responsive thead th:first-child { left: 0; z-index: 4; }
-
-/* --- Estilos para la tabla LM --- */
-.lm-table .editable-cell[contenteditable="true"]:hover {
-    background-color: #f0f8ff;
-    cursor: cell;
-}
-
-.lm-table .editable-cell.saving {
-    background-color: #fffbe6; /* Amarillo claro */
-    transition: background-color 0.3s;
-}
-
-.lm-table .editable-cell.saved-success {
-    background-color: #d4edda; /* Verde claro */
-    transition: background-color 0.3s;
-}
-
-.lm-table .editable-cell.saved-error {
-    background-color: #f8d7da; /* Rojo claro */
-    transition: background-color 0.3s;
-}
-/* --- Estilos para la tabla LM --- */
-.lm-table .editable-cell[contenteditable="true"]:hover {
-    background-color: #f0f8ff;
-    cursor: cell;
-}
-
-/* Clases de Feedback de Guardado */
-.lm-table .editable-cell.saving { background-color: #fffbe6; transition: background-color 0.3s; }
-.lm-table .editable-cell.saved-success { background-color: #d4edda; transition: background-color 0.3s; }
-.lm-table .editable-cell.saved-error { background-color: #f8d7da; transition: background-color 0.3s; }
-
-/* === NUEVAS CLASES PARA ESTILO DE CELDAS === */
-.cell-ok { background-color: #c6efce !important; color: #006100 !important; font-weight: bold; }
-.cell-warning { background-color: #ffeb9c !important; color: #9c6500 !important; }
-.cell-danger-text { color: #ff0000 !important; font-weight: bold; }
-
-/* === NUEVA CLASE PARA REORDENAR === */
-.sortable-ghost {
-    opacity: 0.4;
-    background-color: #add8e6;
-}
-.sortable-handle {
-    cursor: move; /* El cursor se convierte en una mano para indicar que se puede mover */
-}
-/* === ESTILOS PARA EL MENÚ CONTEXTUAL DE CELDAS (ESTILO EXCEL) === */
-#cell-context-menu {
-    position: absolute;
-    display: none;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    border-radius: 5px;
-    padding: 10px;
-    z-index: 1000;
-    width: 250px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
-/* Pestañas para Fondo/Texto */
-.context-menu-tabs {
-    display: flex;
-    border-bottom: 1px solid #dee2e6;
-    margin-bottom: 10px;
-}
-.context-menu-tab {
-    padding: 8px 12px;
-    cursor: pointer;
-    font-weight: 500;
-    color: #495057;
-    border-bottom: 3px solid transparent;
-    margin-bottom: -1px;
-}
-.context-menu-tab.active {
-    color: #007bff;
-    border-bottom-color: #007bff;
-}
-
-/* Contenedores de paletas */
-.context-menu-palette-content { display: none; }
-.context-menu-palette-content.active { display: block; }
-.context-menu-section-title {
-    font-weight: bold; font-size: 0.8rem; color: #6c757d;
-    margin-top: 10px; margin-bottom: 8px;
-}
-
-/* --- CORRECCIÓN CLAVE AQUÍ --- */
-
-/* Paleta general */
-.color-palette {
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 4px;
-}
-
-/* Colores del tema (mantiene la estructura de columnas) */
-.theme-colors-container { display: flex; justify-content: space-between; gap: 4px; }
-.color-column { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-
-/* Cuadro de color individual */
-.color-box {
-    width: 100%;
-    height: 0;
-    padding-bottom: 100%;
-    position: relative;
-    border-radius: 2px;
-    cursor: pointer;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    transition: transform 0.1s ease;
-    background-color: var(--color);
-}
-/* Le damos el color de fondo a través de una variable en línea */
-.color-box {
-    background-color: var(--bg-color);
-}
-.color-box:hover { transform: scale(1.15); z-index: 10; border-color: #007bff; }
-
-/* Opciones inferiores del menú */
-#cell-context-menu .context-divider { border-top: 1px solid #e9ecef; margin: 10px 0; }
-#cell-context-menu .more-colors-btn, #cell-context-menu .reset-style-btn {
-    display: block; width: 100%; border: none; background: none;
-    padding: 8px; border-radius: 5px; cursor: pointer;
-    font-weight: 500; text-align: left;
-}
-#cell-context-menu .more-colors-btn:hover, #cell-context-menu .reset-style-btn:hover { background-color: #e9ecef; }
-#cell-context-menu .reset-style-btn { color: #d9534f; margin-top: 4px; }
-
-/* ==========================================================================
-   ESTILOS PARA EL BOTÓN DE GUARDADO FLOTANTE EN MÓVIL
-   ========================================================================== */
-
-/* Estilos por defecto para el contenedor del botón (vista de escritorio) */
-.save-button-container {
-    text-align: center;
-    padding: 2rem 0;
-}
-
-/* 
-  Cuando la pantalla es de 768px o menos (móviles en vertical),
-  aplicamos los siguientes estilos para hacerlo "pegajoso".
-*/
+/* Botón flotante para guardar en móviles */
+.save-button-container { text-align: center; padding: 2rem 0; }
 @media (max-width: 768px) {
-    /* 
-      Añadimos un espacio en la parte inferior del contenido principal para que el
-      último elemento del formulario no quede oculto DETRÁS de la barra de guardado.
-      Este es un paso crucial.
-    */
-    main.container-fluid {
-        padding-bottom: 100px; /* Un poco más que la altura de la barra */
-    }
-
+    main.container-fluid { padding-bottom: 100px; }
     .save-button-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        
-        /* Estilos visuales para la barra */
+        position: fixed; bottom: 0; left: 0; width: 100%;
         background-color: rgba(255, 255, 255, 0.95);
         border-top: 1px solid #dee2e6;
         padding: 0.75rem 1rem;
         box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
-        z-index: 1030; /* Asegura que esté por encima de otros elementos */
-        
-        /* Efecto moderno de "vidrio esmerilado" */
+        z-index: 1030;
         -webkit-backdrop-filter: blur(5px);
         backdrop-filter: blur(5px);
-        
-        /* Reseteamos el padding superior que tenía en escritorio */
-        padding-top: 0.75rem; 
     }
-
-    /* Hacemos que el botón ocupe todo el ancho de la barra para que sea fácil de presionar */
-    .save-button-container .btn {
-        width: 100%;
-        font-size: 1.1rem; /* Un poco más grande para móviles */
-    }
+    .save-button-container .btn { width: 100%; font-size: 1.1rem; }
 }
