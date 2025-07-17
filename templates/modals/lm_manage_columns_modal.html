@@ -1,0 +1,44 @@
+<!-- =================================================================== -->
+<!-- ====== MODAL PARA GESTIONAR COLUMNAS (MANAGE COLUMNS) ====== -->
+<!-- =================================================================== -->
+
+<!-- CAMBIO CLAVE: Se añade role="dialog" para mejorar la accesibilidad -->
+<div class="modal fade" id="manageColumnsModal" tabindex="-1" role="dialog" aria-labelledby="manageColumnsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manageColumnsModalLabel">Gestionar Columnas</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Arrastra las columnas para reordenarlas. Ajusta su visibilidad, ancho y permisos de edición.</p>
+                
+                <ul id="manage-columns-list" class="list-group">
+                    <!-- Las columnas se cargarán aquí dinámicamente con JavaScript -->
+                </ul>
+
+                <hr>
+                <h5 class="mt-4">Añadir Nueva Columna</h5>
+                <form action="{{ url_for('add_column_lm') }}" method="POST" class="form-inline">
+                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                    <div class="form-group mb-2">
+                        <label for="new_column_name" class="sr-only">Nombre</label>
+                        <input type="text" class="form-control" id="new_column_name" name="nombre" placeholder="Nombre de la columna" required>
+                    </div>
+                    <div class="form-group mx-sm-3 mb-2">
+                        <label for="new_column_width" class="sr-only">Ancho</label>
+                        <input type="number" class="form-control" id="new_column_width" name="ancho_columna" placeholder="Ancho (ej: 150)" value="150" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary mb-2">Añadir Columna</button>
+                </form>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                <button type="button" id="saveColumnChanges" class="btn btn-success">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+</div>

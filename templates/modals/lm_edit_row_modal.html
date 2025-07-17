@@ -1,18 +1,20 @@
-<!-- templates/modals/lm_edit_row_modal.html -->
-<div class="modal fade" id="editRowModal" tabindex="-1" aria-labelledby="editRowModalLabel" aria-hidden="true">
+<!-- =================================================================== -->
+<!-- ====== MODAL PARA EDITAR FILA (EDIT ROW) ====== -->
+<!-- =================================================================== -->
+
+<!-- CAMBIO CLAVE: Se añade role="dialog" para mejorar la accesibilidad -->
+<div class="modal fade" id="editRowModal" tabindex="-1" role="dialog" aria-labelledby="editRowModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <!-- La acción del formulario se establecerá dinámicamente con JS -->
             <form id="editRowForm" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editRowModalLabel">Editar Orden de Trabajo</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">×</span>
+                    </button>
                 </div>
                 <div class="modal-body">
-                    <!-- Campo oculto para saber qué WIP order estamos editando -->
-                    <input type="hidden" id="edit_original_wip_order" name="original_wip_order">
-
                     <div class="form-group">
                         <label for="edit_wip_order" class="font-weight-bold">WIP Order</label>
                         <input type="text" class="form-control" id="edit_wip_order" name="wip_order" required>

@@ -1,0 +1,76 @@
+<div id="cell-context-menu">
+    <!-- Pestañas para cambiar entre paletas -->
+    <div class="context-menu-tabs">
+        <div class="context-menu-tab active" data-target="bg-palette-content">Relleno</div>
+        <div class="context-menu-tab" data-target="font-palette-content">Fuente</div>
+    </div>
+
+    <!-- Contenido para la Pestaña de Color de Relleno (Fondo) -->
+    <div id="bg-palette-content" class="context-menu-palette-content active">
+        <div class="context-menu-section-title">Theme Colors</div>
+        <div class="theme-colors-container">
+            <!-- (Columnas de colores para el fondo - sin cambios) -->
+            <div class="color-column">
+                <div class="color-box" data-color="#ffffff" style="--bg-color:#ffffff; border-color: #ddd;"></div>
+                <div class="color-box" data-color="#f2f2f2" style="--bg-color:#f2f2f2;"></div>
+                <div class="color-box" data-color="#d9d9d9" style="--bg-color:#d9d9d9;"></div>
+                <div class="color-box" data-color="#bfbfbf" style="--bg-color:#bfbfbf;"></div>
+                <div class="color-box" data-color="#a6a6a6" style="--bg-color:#a6a6a6;"></div>
+                <div class="color-box" data-color="#808080" style="--bg-color:#808080;"></div>
+            </div>
+            <div class="color-column">
+                <div class="color-box" data-color="#000000" style="--bg-color:#000000;"></div>
+                <div class="color-box" data-color="#262626" style="--bg-color:#262626;"></div>
+                <div class="color-box" data-color="#404040" style="--bg-color:#404040;"></div>
+                <div class="color-box" data-color="#595959" style="--bg-color:#595959;"></div>
+                <div class="color-box" data-color="#737373" style="--bg-color:#737373;"></div>
+                <div class="color-box" data-color="#8c8c8c" style="--bg-color:#8c8c8c;"></div>
+            </div>
+            <div class="color-column">
+                <div class="color-box" data-color="#5b9bd5" style="--bg-color:#5b9bd5;"></div>
+                <div class="color-box" data-color="#83b3e0" style="--bg-color:#83b3e0;"></div>
+                <div class="color-box" data-color="#a9c9ea" style="--bg-color:#a9c9ea;"></div>
+                <div class="color-box" data-color="#d0e1f5" style="--bg-color:#d0e1f5;"></div>
+                <div class="color-box" data-color="#e8f0fa" style="--bg-color:#e8f0fa;"></div>
+            </div>
+            <div class="color-column">
+                <div class="color-box" data-color="#ed7d31" style="--bg-color:#ed7d31;"></div>
+                <div class="color-box" data-color="#f29e62" style="--bg-color:#f29e62;"></div>
+                <div class="color-box" data-color="#f6be93" style="--bg-color:#f6be93;"></div>
+                <div class="color-box" data-color="#fadec4" style="--bg-color:#fadec4;"></div>
+                <div class="color-box" data-color="#fdeee2" style="--bg-color:#fdeee2;"></div>
+            </div>
+            <div class="color-column">
+                <div class="color-box" data-color="#70ad47" style="--bg-color:#70ad47;"></div>
+                <div class="color-box" data-color="#93c370" style="--bg-color:#93c370;"></div>
+                <div class="color-box" data-color="#b5d999" style="--bg-color:#b5d999;"></div>
+                <div class="color-box" data-color="#d7eac2" style="--bg-color:#d7eac2;"></div>
+                <div class="color-box" data-color="#eaf5e1" style="--bg-color:#eaf5e1;"></div>
+            </div>
+        </div>
+        <div class="context-menu-section-title mt-2">Standard Colors</div>
+        <div class="standard-colors-container">
+            <!-- (Colores estándar - sin cambios) -->
+        </div>
+        <button class="format-option no-fill-btn mt-2"><i class="fas fa-fill-drip" style="opacity: 0.5;"></i><span class="ml-2">No Fill</span></button>
+    </div>
+
+    <!-- NUEVO Contenido para la Pestaña de Color de Fuente -->
+    <div id="font-palette-content" class="context-menu-palette-content">
+        <div class="context-menu-section-title">Font Color</div>
+        <!-- Se reutiliza la misma estructura de paletas -->
+        <div class="theme-colors-container">...</div>
+        <div class="context-menu-section-title mt-2">Standard Colors</div>
+        <div class="standard-colors-container">...</div>
+        <button class="format-option font-color-auto-btn mt-2"><i class="fas fa-magic"></i><span class="ml-2">Automatic</span></button>
+    </div>
+
+    <!-- Opciones Comunes -->
+    <div class="context-divider"></div>
+    <div class="format-option" id="format-bold">
+        <input type="checkbox" id="bold-checkbox" onclick="event.stopPropagation();"> 
+        <label for="bold-checkbox" class="mb-0 ml-1"><strong>Negrita</strong></label>
+    </div>
+    <div class="context-divider"></div>
+    <button class="reset-style-btn" id="reset-style-btn"><i class="fas fa-times mr-2"></i>Quitar Formato</button>
+</div>

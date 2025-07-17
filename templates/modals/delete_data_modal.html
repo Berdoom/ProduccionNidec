@@ -1,0 +1,33 @@
+<!-- templates/modals/delete_data_modal.html -->
+<div class="modal fade" id="deleteDataModal" tabindex="-1" aria-labelledby="deleteDataModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteDataModalLabel">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Confirmar Eliminación de Datos
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">×</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p><strong>¡Atención!</strong> Esta acción es <strong>irreversible</strong> y no se puede deshacer.</p>
+                <p>
+                    Estás a punto de borrar TODOS los datos de pronóstico y producción para el grupo 
+                    <strong><span id="deleteModalGroupName" class="font-weight-bold"></span></strong> 
+                    en la fecha <strong><span id="deleteModalDate" class="font-weight-bold"></span></strong>.
+                </p>
+                <p class="text-danger">¿Estás completamente seguro de que quieres continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form id="deleteDataForm" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt mr-2"></i>Sí, Eliminar Todos los Datos
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
