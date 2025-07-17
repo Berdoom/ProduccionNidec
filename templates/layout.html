@@ -19,19 +19,28 @@
     <!-- =================================================================== -->
     <!-- ====== LAYOUT DE DOS BARRAS (BLANCA Y VERDE) - VERSIÓN FINAL ====== -->
     <!-- =================================================================== -->
+    {% set page_title %}
+        {% block page_header %}Panel Principal{% endblock %}
+    {% endset %}
     
     <!-- 1. CABECERA SUPERIOR BLANCA -->
     <header class="header">
-        <!-- Lado Izquierdo: Logo y Título -->
+        <!-- ========================================================== -->
+        <!-- ================ MODIFICACIÓN FINAL AQUÍ =================== -->
+        <!-- ========================================================== -->
+        <!-- Lado Izquierdo: Logo y Título (Ahora responsivo) -->
         <div class="d-flex align-items-center">
             <a href="{{ url_for('dashboard') }}">
                 <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Nidec" style="max-height: 45px;">
             </a>
-            <h3 class="ml-4 mb-0 page-header-text">{% block page_header %}Panel Principal{% endblock %}</h3>
+            <!-- Título para escritorio -->
+            <h3 class="ml-3 mb-0 page-header-text d-none d-lg-block">{{ page_title|trim }}</h3>
+            <!-- Título para móvil (más pequeño) -->
+            <h5 class="ml-3 mb-0 page-header-text d-lg-none">{{ page_title|trim }}</h5>
         </div>
-        <!-- Lado Derecho: Info de Usuario y Salir -->
-        <div class="d-flex align-items-center">
-            <span class="user-info d-none d-md-block">
+        <!-- Lado Derecho: Info de Usuario y Salir (OCULTO EN MÓVIL) -->
+        <div class="d-none d-md-flex align-items-center">
+            <span class="user-info">
                 <i class="fas fa-user-circle mr-1"></i> 
                 <strong>{{ session.get('nombre_completo') or session.get('username') }}</strong> ({{ session.get('role') }})
             </span>
@@ -44,11 +53,22 @@
     <!-- 2. BARRA DE NAVEGACIÓN VERDE -->
     <nav class="navbar navbar-expand-lg navbar-dark nidec-navbar mb-4">
         <div class="container-fluid">
-            <!-- Botón para Móvil -->
+            
+            <!-- Botón para Móvil (Toggler) - Ahora a la izquierda -->
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            
+
+            <!-- Campana de notificaciones (versión móvil) - Ahora a la derecha -->
+            {% if 'actions.center' in permissions %}
+            <a class="nav-link notification-bell text-white d-lg-none ml-auto" href="{{ url_for('centro_acciones') }}" title="Centro de Acciones">
+                <i class="fas fa-bell"></i>
+                {% if pending_actions_count > 0 %}
+                    <span class="badge badge-danger notification-badge">{{ pending_actions_count }}</span>
+                {% endif %}
+            </a>
+            {% endif %}
+
             <div class="collapse navbar-collapse" id="navbarNav">
                 <!-- Enlaces de Navegación -->
                 <ul class="navbar-nav">
@@ -84,8 +104,6 @@
                         </li>
                     {% endif %}
                     
-                    <!-- ===== ENLACE "CENTRO DE ACCIONES" ELIMINADO DE AQUÍ ===== -->
-                    
                     {% if 'users.manage' in permissions or 'roles.manage' in permissions or 'logs.view' in permissions %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdmin" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -101,8 +119,8 @@
                     {% endif %}
                 </ul>
 
-                <!-- Notificación a la Derecha -->
-                <ul class="navbar-nav ml-auto">
+                <!-- Notificación a la Derecha (versión escritorio) -->
+                <ul class="navbar-nav ml-auto d-none d-lg-flex">
                     {% if 'actions.center' in permissions %}
                     <li class="nav-item">
                         <a class="nav-link notification-bell" href="{{ url_for('centro_acciones') }}" title="Centro de Acciones">
@@ -114,6 +132,23 @@
                     </li>
                     {% endif %}
                 </ul>
+
+                <!-- Info de Usuario y Salir para Móvil (DENTRO DEL MENÚ COLAPSABLE) -->
+                <div class="d-md-none mt-3 pt-3 border-top border-white-25">
+                    <div class="px-3 mb-2 text-white">
+                        <div>
+                            <i class="fas fa-user-circle mr-2"></i>
+                            <strong>{{ session.get('nombre_completo') or session.get('username') }}</strong>
+                        </div>
+                        <small class="text-white-50 pl-4">Rol: {{ session.get('role') }}</small>
+                    </div>
+                    <div class="px-3">
+                        <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-block">
+                            <i class="fas fa-sign-out-alt mr-1"></i> Salir
+                        </a>
+                    </div>
+                </div>
+
             </div>
         </div>
     </nav>
