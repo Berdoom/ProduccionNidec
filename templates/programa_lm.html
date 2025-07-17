@@ -1,168 +1,212 @@
 {% extends "layout.html" %}
 
+{% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/programa_lm.css') }}">
+{% endblock %}
+
 {% block title %}Programa LM - Pendientes{% endblock %}
 {% block page_header %}Seguimiento de Órdenes de Trabajo (Pendientes){% endblock %}
 
 {% block content %}
 <div class="content-section">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+    <!-- BARRA DE ACCIONES SUPERIOR -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap" style="gap: 0.5rem;">
         <h4 class="mb-2 mb-md-0">Listado de Órdenes Pendientes</h4>
-        <div>
-            <!-- Enlace para ver las órdenes aprobadas -->
-            <a href="{{ url_for('programa_lm_aprobados') }}" class="btn btn-outline-success">
-                <i class="fas fa-check-circle mr-1"></i> Ver Aprobados
-            </a>
-            {% if session.role == 'ADMIN' %}
-            <div class="btn-group ml-2" role="group">
+        <div class="d-flex align-items-center flex-wrap" style="gap: 0.5rem;">
+            <button id="toggleActionsBtn" class="btn btn-outline-secondary"><i class="fas fa-eye-slash"></i> Ocultar Acciones</button>
+            <a href="{{ url_for('programa_lm_aprobados') }}" class="btn btn-outline-success"><i class="fas fa-check-circle mr-1"></i> Ver Aprobados</a>
+            {% if 'programa_lm.admin' in permissions %}
+            <div class="btn-group ml-md-auto" role="group">
+                <button class="btn btn-primary" data-toggle="modal" data-target="#addRowModal"><i class="fas fa-plus mr-1"></i> Añadir</button>
                 <button id="reorderBtn" class="btn btn-info"><i class="fas fa-sort mr-1"></i> Ordenar</button>
-                <button class="btn btn-nidec-style" data-toggle="modal" data-target="#addRowModal"><i class="fas fa-plus mr-1"></i> Añadir</button>
-                <button class="btn btn-secondary" data-toggle="modal" data-target="#addColumnModal"><i class="fas fa-columns mr-1"></i> Columnas</button>
+                <button class="btn btn-secondary" data-toggle="modal" data-target="#manageColumnsModal"><i class="fas fa-columns mr-1"></i> Columnas</button>
             </div>
             {% endif %}
         </div>
     </div>
 
-    <div class="table-responsive">
+    <!-- VISTA PARA ESCRITORIO (LA TABLA) -->
+    <div class="lm-table-container desktop-view">
         <table class="table table-bordered table-hover lm-table">
             <thead class="thead-light">
                 <tr id="lm-table-header-row">
-                    <!-- La columna Acciones ahora es visible para ambos roles -->
-                    <th class="non-draggable" style="min-width: 120px;">Acciones</th>
-                    <th class="non-draggable" style="min-width: 150px;">WIP order</th>
-                    <th class="non-draggable" style="min-width: 150px;">Item</th>
-                    <th class="non-draggable" style="min-width: 70px;">QTY</th>
+                    <th class="actions-column sticky-col" style="width: 110px; min-width: 110px;">Acciones</th>
+                    <th style="width: 60px; min-width: 60px;">No.</th>
+                    <th style="width: 120px; min-width: 120px;">WIP order</th>
+                    <th style="width: 120px; min-width: 120px;">Item</th>
+                    <th style="width: 50px; min-width: 50px;">QTY</th>
                     {% for columna in columnas %}
-                        <th style="min-width: 180px;" data-id="{{ columna.id }}" data-columna-id="{{ columna.id }}">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span>{{ columna.nombre }}</span>
-                                {% if session.role == 'ADMIN' %}
-                                <form action="{{ url_for('delete_column_lm', columna_id=columna.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar la columna \'{{ columna.nombre }}\' y TODOS sus datos? Esta acción no se puede deshacer.');">
-                                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger p-0" style="width: 20px; height: 20px; line-height: 1;" title="Eliminar Columna {{ columna.nombre }}">×</button>
-                                </form>
-                                {% endif %}
-                            </div>
+                        <th style="width: {{ columna.ancho_columna }}px; min-width: {{ columna.ancho_columna }}px;" data-col-id="{{ columna.id }}" class="sortable-column {% if 'programa_lm.admin' not in permissions %}non-draggable{% endif %}">
+                            {{ columna.nombre }}
                         </th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody>
                 {% for orden in ordenes %}
-                <tr>
-                    <td class="text-center">
-                        {% if session.role == 'ADMIN' %}
-                        <button class="btn btn-sm btn-success" data-toggle="modal" data-target="#editRowModal" data-orden-id="{{ orden.id }}" data-wip-order="{{ orden.wip_order }}" data-item="{{ orden.item or '' }}" data-qty="{{ orden.qty }}" title="Editar Orden"><i class="fas fa-edit"></i></button>
-                        <form action="{{ url_for('delete_row_lm', orden_id=orden.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar la orden \'{{ orden.wip_order }}\' por completo?');">
-                             <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
-                             <button type="submit" class="btn btn-sm btn-danger" title="Eliminar Orden"><i class="fas fa-trash-alt"></i></button>
-                        </form>
-                        {% endif %}
-                        <!-- Para TODOS los roles (ADMIN y PROGRAMA_LM), se muestra el botón de completar -->
-                        <form action="{{ url_for('toggle_status_lm', orden_id=orden.id) }}" method="POST" class="d-inline">
-                             <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
-                             <button type="submit" class="btn btn-sm btn-outline-primary" title="Marcar como Completada">
-                                <i class="fas fa-check"></i>
-                             </button>
-                        </form>
+                <tr class="{% if orden.id in duplicate_ids %}duplicate-row{% endif %}">
+                    <td class="actions-column sticky-col">
+                        <div class="actions-cell-container">
+                            {% if 'programa_lm.edit' in permissions %}
+                            <form action="{{ url_for('toggle_status_lm', orden_id=orden.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                <button type="submit" class="btn btn-sm btn-success" title="Marcar como Aprobada"><i class="fas fa-check"></i></button>
+                            </form>
+                            {% endif %}
+                            {% if 'programa_lm.admin' in permissions %}
+                            <button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#editRowModal"
+                                data-orden-id="{{ orden.id }}"
+                                data-wip-order="{{ orden.wip_order }}"
+                                data-item="{{ orden.item or '' }}"
+                                data-qty="{{ orden.qty }}"
+                                title="Editar Fila">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <form action="{{ url_for('delete_row_lm', orden_id=orden.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que quieres eliminar la orden \'{{ orden.wip_order }}\'?');" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                                <button type="submit" class="btn btn-sm btn-danger" title="Eliminar Fila"><i class="fas fa-trash-alt"></i></button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </td>
-                    <td>{{ orden.wip_order }}</td>
-                    <td>{{ orden.item or '' }}</td>
-                    <td>{{ orden.qty }}</td>
+                    <td class="align-middle text-center">{{ (pagination.page - 1) * pagination.per_page + loop.index }}</td>
+                    <td class="align-middle">{{ orden.wip_order }}</td>
+                    <td class="align-middle">{{ orden.item or '' }}</td>
+                    <td class="align-middle text-center">{{ orden.qty }}</td>
                     {% for columna in columnas %}
-                        {% set celda_obj = datos.get(orden.id, {}).get(columna.id) %}
-                        {% set editable = 'true' if session.role == 'ADMIN' or columna.editable_por_lm else 'false' %}
+                        {% set celda_obj = datos.get((orden.id, columna.id)) %}
                         {% set estilos_str = '' %}
                         {% if celda_obj and celda_obj.estilos_css %}
                             {% set estilos_dict = celda_obj.estilos_css | fromjson %}
                             {% set style_parts = [] %}
                             {% if estilos_dict.backgroundColor %}{% set _ = style_parts.append('background-color:' ~ estilos_dict.backgroundColor) %}{% endif %}
                             {% if estilos_dict.color %}{% set _ = style_parts.append('color:' ~ estilos_dict.color) %}{% endif %}
+                            {% if estilos_dict.fontWeight %}{% set _ = style_parts.append('font-weight:' ~ estilos_dict.fontWeight) %}{% endif %}
                             {% set estilos_str = style_parts|join(';') %}
                         {% endif %}
-                        <td contenteditable="{{ editable }}"
-                            class="{% if editable == 'true' %}editable-cell{% endif %}"
-                            data-orden-id="{{ orden.id }}"
-                            data-columna-id="{{ columna.id }}"
-                            style="{{ estilos_str }}">
-                            {{- celda_obj.valor if celda_obj else '' -}}
-                        </td>
+                        <td class="editable-cell align-middle" 
+                            style="{{ estilos_str }}"
+                            data-orden-id="{{ orden.id }}" 
+                            data-columna-id="{{ columna.id }}" 
+                            {% if 'programa_lm.admin' in permissions or ('programa_lm.edit' in permissions and columna.editable_por_lm) %}contenteditable="true"{% else %}contenteditable="false"{% endif %}>{{- celda_obj.valor if celda_obj else '' -}}</td>
                     {% endfor %}
                 </tr>
                 {% else %}
-                <tr><td colspan="{{ 4 + columnas|length }}" class="text-center text-muted py-4">¡No hay órdenes pendientes!</td></tr>
+                <tr><td colspan="{{ 5 + columnas|length }}" class="text-center text-muted py-4">¡No hay órdenes pendientes!</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    <!-- VISTA PARA MÓVIL (TARJETAS) -->
+    <div class="mobile-view">
+        <div class="rotate-prompt-container">
+            <div class="rotate-prompt">
+                <i class="fas fa-mobile-alt phone-icon"></i>
+                <span>Gira tu dispositivo para ver la tabla completa.</span>
+            </div>
+        </div>
+        
+        {% for orden in ordenes %}
+        <div class="card lm-card {% if orden.id in duplicate_ids %}duplicate-row{% endif %}">
+            <div class="card-header">
+                <strong>#{{ (pagination.page - 1) * pagination.per_page + loop.index }}</strong> - {{ orden.wip_order }}
+            </div>
+            <div class="card-body">
+                <p><strong>Item:</strong> {{ orden.item or 'N/A' }}</p>
+                <p><strong>QTY:</strong> {{ orden.qty }}</p>
+                <hr>
+                {% for columna in columnas %}
+                    {% set celda_obj = datos.get((orden.id, columna.id)) %}
+                    {% if celda_obj and celda_obj.valor %}
+                    {% set estilos_dict = celda_obj.estilos_css | fromjson if celda_obj and celda_obj.estilos_css else {} %}
+                    <div class="mobile-editable-cell" 
+                         data-orden-id="{{ orden.id }}" 
+                         data-columna-id="{{ columna.id }}"
+                         style="background-color: {{ estilos_dict.backgroundColor or '' }};">
+                        <p style="color: {{ estilos_dict.color or 'inherit' }}; font-weight: {{ estilos_dict.fontWeight or 'normal' }}">
+                            <strong>{{ columna.nombre }}:</strong> {{ celda_obj.valor }}
+                        </p>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="card-footer actions-column">
+                <div class="actions-cell-container">
+                     {% if 'programa_lm.edit' in permissions %}
+                        <form action="{{ url_for('toggle_status_lm', orden_id=orden.id) }}" method="POST" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                            <button type="submit" class="btn btn-sm btn-success" title="Marcar como Aprobada">Aprobar</button>
+                        </form>
+                    {% endif %}
+                    {% if 'programa_lm.admin' in permissions %}
+                        <button class="btn btn-sm btn-warning" data-toggle="modal" data-target="#editRowModal"
+                                data-orden-id="{{ orden.id }}" data-wip-order="{{ orden.wip_order }}" data-item="{{ orden.item or '' }}" data-qty="{{ orden.qty }}" title="Editar Fila">Editar</button>
+                        <form action="{{ url_for('delete_row_lm', orden_id=orden.id) }}" method="POST" onsubmit="return confirm('¿Seguro?');" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Eliminar Fila">Eliminar</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+            <p class="text-center text-muted">No hay órdenes pendientes.</p>
+        {% endfor %}
+    </div>
+
+    {% include 'partials/_pagination.html' %}
 </div>
 
-<!-- Menú contextual (no cambia) -->
+<!-- ======================================================= -->
+<!-- ===== MENÚ CONTEXTUAL UNIFICADO PARA TODOS LOS DISPOSITIVOS ======== -->
+<!-- ======================================================= -->
 <div id="cell-context-menu">
-    <!-- Pestañas -->
     <div class="context-menu-tabs">
-        <div class="context-menu-tab active" data-target="bg-palette-content">Fondo</div>
-        <div class="context-menu-tab" data-target="text-palette-content">Fuente</div>
-    </div>
-
-    <!-- Contenido para la Pestaña de Color de Fondo -->
-    <div id="bg-palette-content" class="context-menu-palette-content active">
-        <!-- Paleta de colores aquí (se generará con JS) -->
-    </div>
-
-    <!-- Contenido para la Pestaña de Color de Texto -->
-    <div id="text-palette-content" class="context-menu-palette-content">
-        <!-- Paleta de colores aquí (se generará con JS) -->
+        <!-- La pestaña "Simple" ahora es la primera y la activa por defecto -->
+        <div class="context-menu-tab active" data-target="simple-palette-content">Simple</div>
+        <div class="context-menu-tab" data-target="bg-palette-content">Relleno</div>
+        <div class="context-menu-tab" data-target="font-palette-content">Fuente</div>
     </div>
     
-    <!-- Opciones Comunes -->
+    <!-- Contenido para la nueva pestaña "Simple" (se generará con JS) -->
+    <div id="simple-palette-content" class="context-menu-palette-content active"></div>
+
+    <!-- Contenido para las pestañas completas (ahora inactivas por defecto) -->
+    <div id="bg-palette-content" class="context-menu-palette-content"></div>
+    <div id="font-palette-content" class="context-menu-palette-content"></div>
+
     <div class="context-divider"></div>
-    <button class="more-colors-btn" id="more-colors-btn"><i class="fas fa-palette mr-2"></i>Más Colores...</button>
-    <button class="reset-style-btn" id="reset-style-btn"><i class="fas fa-times mr-2"></i>Quitar Estilos</button>
-
-    <!-- Selector de color nativo, oculto -->
-    <input type="color" id="native-color-picker" style="display: none;">
+    <div id="format-bold" class="format-option">
+        <input type="checkbox" id="bold-checkbox" class="mr-2" style="cursor: pointer;">
+        <label for="bold-checkbox" class="mb-0" style="cursor: pointer;"><strong>Negrita</strong></label>
+    </div>
+    <button id="reset-style-btn" class="reset-style-btn"><i class="fas fa-eraser mr-2"></i>Limpiar Formato</button>
 </div>
+<!-- FIN DEL MENÚ CONTEXTUAL UNIFICADO -->
 
-<!-- Modales para Admin -->
-{% if session.role == 'ADMIN' %}
+<!-- Modales -->
+{% if 'programa_lm.admin' in permissions %}
     {% include 'modals/lm_add_row_modal.html' %}
-    {% include 'modals/lm_add_column_modal.html' %}
     {% include 'modals/lm_edit_row_modal.html' %}
+    {% include 'modals/lm_manage_columns_modal.html' %}
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script src="{{ url_for('static', filename='js/programa_lm.js') }}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const csrfToken = "{{ session.csrf_token }}";
-        const updateUrl = "{{ url_for('update_cell_lm') }}";
-        
-        initializeEditableCells(updateUrl, csrfToken);
-        initializeContextMenu(updateUrl, csrfToken);
-
-        {% if session.role == 'ADMIN' %}
-        const reorderBtn = document.getElementById('reorderBtn');
-        if (reorderBtn) {
-            reorderBtn.addEventListener('click', function() {
-                toggleReorderMode(this, "{{ url_for('reorder_columns') }}", csrfToken);
-            });
-        }
-
-        $('#editRowModal').on('show.bs.modal', function (event) {
-            var button = $(event.relatedTarget);
-            var ordenId = button.data('orden-id');
-            var actionUrl = "{{ url_for('edit_row_lm', orden_id=0) }}".replace('0', ordenId);
-            
-            var modal = $(this);
-            modal.find('.modal-title').text('Editar Orden: ' + button.data('wip-order'));
-            modal.find('#editRowForm').attr('action', actionUrl);
-            modal.find('#edit_wip_order').val(button.data('wip-order'));
-            modal.find('#edit_item').val(button.data('item'));
-            modal.find('#edit_qty').val(button.data('qty'));
-        });
-        {% endif %}
+    // Script para inicializar modales de Bootstrap
+    $('#editRowModal').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget);
+        var ordenId = button.data('orden-id');
+        var actionUrl = "{{ url_for('edit_row_lm', orden_id=0) }}".replace('0', ordenId);
+        var modal = $(this);
+        modal.find('#editRowForm').attr('action', actionUrl);
+        modal.find('#edit_wip_order').val(button.data('wip-order'));
+        modal.find('#edit_item').val(button.data('item'));
+        modal.find('#edit_qty').val(button.data('qty'));
     });
 </script>
 {% endblock %}

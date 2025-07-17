@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestionar Acceso de Rol{% endblock %}
+{% block page_header %}Gestionar Acceso para Rol: {{ rol.nombre }}{% endblock %}
+
+{% block content %}
+<div class="content-section">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <p class="text-muted">
+            Selecciona a qué grupos de datos tendrán acceso los usuarios con el rol <strong>{{ rol.nombre }}</strong>.
+            <br>
+            Un rol siempre tendrá acceso a sus propios datos, aunque no esté marcado.
+        </p>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Grupos de Datos Visibles</h5>
+                <hr>
+                {% for target in target_roles %}
+                <div class="form-group form-check">
+                    <input type="checkbox" class="form-check-input" 
+                           id="role_{{ target.id }}" 
+                           name="viewable_roles" 
+                           value="{{ target.id }}"
+                           {% if target in rol.viewable_roles %}checked{% endif %}>
+                    <label class="form-check-label" for="role_{{ target.id }}">
+                        <strong>{{ target.nombre }}</strong>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <hr>
+        <div class="text-right">
+            <a href="{{ url_for('manage_roles') }}" class="btn btn-secondary">Cancelar y Volver</a>
+            <button type="submit" class="btn btn-nidec-style">
+                <i class="fas fa-save mr-1"></i> Guardar Cambios de Acceso
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
