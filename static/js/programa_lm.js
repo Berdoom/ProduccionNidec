@@ -1,203 +1,274 @@
-// Variable global para la instancia de SortableJS
-let sortableInstance = null;
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar todas las funcionalidades de la página
+    initializeActionsToggle();
+    
+    const csrfToken = document.querySelector('input[name="csrf_token"]')?.value;
+    if (!csrfToken) {
+        console.error("CSRF Token no encontrado. Las funciones de guardado estarán deshabilitadas.");
+        return;
+    }
 
-// ===================================================================
-// === CONFIGURACIÓN DE LA PALETA DE COLORES ESTILO EXCEL ===
-// ===================================================================
-const EXCEL_PALETTE = {
-    theme: [
-        ['#FFFFFF', '#F2F2F2', '#D9D9D9', '#BFBFBF', '#A6A6A6', '#808080'],
-        ['#000000', '#0D0D0D', '#262626', '#404040', '#595959', '#737373'],
-        ['#BF9000', '#FFC000', '#FFD966', '#FFF2CC', '#FBE5D6', '#E6B9B8'],
-        ['#0070C0', '#00B0F0', '#9DC3E6', '#BDD7EE', '#DEEAF6', '#DAE3F3'],
-        ['#00B050', '#92D050', '#A9D18E', '#C6E0B4', '#E2EFDA', '#D9EAD3'],
-        ['#7030A0', '#C000C0', '#DFA6E4', '#E6B8E8', '#F2DCDB', '#EAD1DC']
-    ],
-    standard: [
-        '#C00000', '#FF0000', '#FFC000', '#FFFF00',
-        '#92D050', '#00B050', '#00B0F0', '#0070C0',
-        '#002060', '#7030A0'
-    ]
-};
+    const updateCellUrl = '/programa_lm/update_cell';
+    const reorderUrl = '/programa_lm/reorder_columns';
+
+    // Se inicializan las mismas funciones para escritorio y móvil
+    initializeEditableCells(updateCellUrl, csrfToken);
+    initializeContextMenu(updateCellUrl, csrfToken);
+    initializeAdminControls(reorderUrl, csrfToken);
+});
 
 /**
- * Crea el HTML para una paleta de colores.
- * @returns {string} El HTML de la paleta.
+ * Lógica para el botón de ocultar/mostrar la columna de acciones.
  */
-function createColorPaletteHTML() {
-    let html = '<div class="context-menu-section-title">Colores del tema</div>';
-    html += '<div class="theme-colors-container">';
-    EXCEL_PALETTE.theme.forEach(column => {
-        html += '<div class="color-column">';
-        column.forEach(color => {
-            // --- CAMBIO AQUÍ: Usamos una variable CSS --bg-color ---
-            html += `<div class="color-box" style="--bg-color:${color};" data-color="${color}"></div>`;
-        });
-        html += '</div>';
-    });
-    html += '</div>';
+function initializeActionsToggle() {
+    const toggleBtn = document.getElementById('toggleActionsBtn');
+    const table = document.querySelector('.lm-table');
 
-    html += '<div class="context-menu-section-title">Colores estándar</div>';
-    html += '<div class="color-palette">';
-    EXCEL_PALETTE.standard.forEach(color => {
-        // --- CAMBIO AQUÍ: Usamos una variable CSS --bg-color ---
-        html += `<div class="color-box" style="--bg-color:${color};" data-color="${color}"></div>`;
+    if (!toggleBtn || !table) return;
+
+    const isHidden = localStorage.getItem('actionsColumnHidden') === 'true';
+    if (isHidden) {
+        table.classList.add('actions-hidden');
+        toggleBtn.innerHTML = '<i class="fas fa-eye"></i> Mostrar Acciones';
+    }
+
+    toggleBtn.addEventListener('click', () => {
+        table.classList.toggle('actions-hidden');
+        const currentlyHidden = table.classList.contains('actions-hidden');
+        toggleBtn.innerHTML = currentlyHidden ? '<i class="fas fa-eye"></i> Mostrar Acciones' : '<i class="fas fa-eye-slash"></i> Ocultar Acciones';
+        localStorage.setItem('actionsColumnHidden', currentlyHidden ? 'true' : 'false');
     });
-    html += '</div>';
-    return html;
 }
 
 /**
- * Inicializa la lógica para las celdas editables.
+ * Guarda los datos de una celda en el servidor.
  */
-function initializeEditableCells(updateUrl, csrfToken) {
+function saveCellData(url, token, cell, payload) {
+    cell.classList.remove('saved-success', 'saved-error');
+    if (!cell.classList.contains('mobile-editable-cell')) {
+        cell.classList.add('saving');
+    }
+    const body = { csrf_token: token, orden_id: cell.dataset.ordenId, columna_id: cell.dataset.columnaId, ...payload };
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    .then(response => { if (!response.ok) return response.json().then(err => Promise.reject(err)); return response.json(); })
+    .then(data => { 
+        if (data.status === 'success' && !cell.classList.contains('mobile-editable-cell')) {
+            cell.classList.add('saved-success');
+            setTimeout(() => cell.classList.remove('saved-success'), 1500);
+        }
+    })
+    .catch(error => { 
+        console.error('Error al guardar:', error); 
+        cell.classList.add('saved-error'); 
+        alert(`Error al guardar: ${error.message || 'Error de red'}`); 
+    })
+    .finally(() => { 
+        if (!cell.classList.contains('mobile-editable-cell')) {
+            cell.classList.remove('saving');
+        }
+    });
+}
+
+/**
+ * Inicializa la edición en línea para las celdas de la tabla de escritorio.
+ */
+function initializeEditableCells(url, token) {
     document.querySelectorAll('.lm-table .editable-cell').forEach(cell => {
         let originalValue = cell.textContent.trim();
         cell.addEventListener('focus', () => { originalValue = cell.textContent.trim(); });
         cell.addEventListener('blur', (e) => {
             const newValue = e.target.textContent.trim();
             if (newValue !== originalValue) {
-                saveCellData(updateUrl, csrfToken, e.target.dataset.ordenId, e.target.dataset.columnaId, { valor: newValue });
+                saveCellData(url, token, e.target, { valor: newValue });
             }
         });
     });
 }
 
 /**
- * Inicializa el menú contextual avanzado.
+ * INICIALIZA EL MENÚ CONTEXTUAL UNIFICADO (CLIC DERECHO O PULSACIÓN LARGA)
  */
-function initializeContextMenu(updateUrl, csrfToken) {
+function initializeContextMenu(url, token) {
     const contextMenu = document.getElementById('cell-context-menu');
-    const bgPaletteContainer = document.getElementById('bg-palette-content');
-    const textPaletteContainer = document.getElementById('text-palette-content');
-    const nativeColorPicker = document.getElementById('native-color-picker');
-    let activeCell = null;
+    if (!contextMenu) return;
+
+    let activeCellElement = null; // El elemento a estilizar (<td> o <p>)
+    let activeContainer = null;   // El contenedor con data-attributes (<td> o <div>)
+    
+    // Por defecto, la propiedad a cambiar es el fondo (para la pestaña "Simple")
     let activeProperty = 'backgroundColor';
 
-    // Generar las paletas y añadirlas al DOM
-    const paletteHTML = createColorPaletteHTML();
-    bgPaletteContainer.innerHTML = paletteHTML;
-    textPaletteContainer.innerHTML = paletteHTML;
+    // --- GENERACIÓN DE PALETAS ---
+    const simpleColors = ['#00B050', '#FFFF00', '#FF0000'];
+    const themeColors = [
+        ['#FFFFFF', '#000000', '#EEECE1', '#1F497D', '#4F81BD', '#C0504D', '#9BBB59', '#8064A2', '#4BACC6', '#F79646'],
+        ['#F2F2F2', '#7F7F7F', '#DDD9C3', '#C6D9F0', '#DCE6F1', '#F2DCDB', '#EBF1DE', '#E5E0EC', '#DBEEF3', '#FDEADA'],
+        ['#D8D8D8', '#595959', '#C4BD97', '#8DB3E2', '#B8CCE4', '#E5B9B7', '#D7E3BC', '#CCC1D9', '#B7DDE8', '#FBD5B5'],
+        ['#BFBFBF', '#3F3F3F', '#938953', '#548DD4', '#95B3D7', '#D99694', '#C3D69B', '#B2A2C7', '#92CDDC', '#FAC08F'],
+        ['#A5A5A5', '#262626', '#494429', '#17365D', '#366092', '#953734', '#76923C', '#5F497A', '#31859B', '#E36C09'],
+        ['#7F7F7F', '#0C0C0C', '#1D1B10', '#0F243E', '#244061', '#632423', '#4F6128', '#3F3151', '#205867', '#974806']
+    ];
+    const standardColors = ['#C00000', '#FF0000', '#FFC000', '#FFFF00', '#92D050', '#00B050', '#00B0F0', '#0070C0', '#002060', '#7030A0'];
 
-    // Manejo de pestañas (Fondo / Fuente)
-    document.querySelectorAll('.context-menu-tab').forEach(tab => {
+    function createFullPaletteHTML(colors, isTheme) {
+        let html = `<div class="${isTheme ? 'theme-colors-container' : 'standard-colors-container'}">`;
+        if (isTheme) {
+            for (let col = 0; col < colors[0].length; col++) {
+                html += '<div class="color-column">';
+                for (let row = 0; row < colors.length; row++) {
+                    html += `<div class="color-box" data-color="${colors[row][col]}" style="--bg-color: ${colors[row][col]}"></div>`;
+                }
+                html += '</div>';
+            }
+        } else {
+            colors.forEach(color => {
+                html += `<div class="color-box" data-color="${color}" style="--bg-color: ${color}"></div>`;
+            });
+        }
+        html += '</div>';
+        return html;
+    }
+    
+    function populateAllPalettes() {
+        const simplePaletteContainer = document.getElementById('simple-palette-content');
+        if (simplePaletteContainer && !simplePaletteContainer.innerHTML.trim()) {
+            let simpleHTML = '<div class="simple-palette-grid">';
+            simpleColors.forEach(color => {
+                simpleHTML += `<div class="color-box" data-color="${color}" style="background-color: ${color};"></div>`;
+            });
+            simpleHTML += '</div>';
+            simplePaletteContainer.innerHTML = simpleHTML;
+        }
+
+        const bgPaletteContainer = document.getElementById('bg-palette-content');
+        if (bgPaletteContainer && !bgPaletteContainer.innerHTML.trim()) {
+            bgPaletteContainer.innerHTML = `<div class="context-menu-section-title">Colores del Tema</div>${createFullPaletteHTML(themeColors, true)}<div class="context-menu-section-title">Colores Estándar</div>${createFullPaletteHTML(standardColors, false)}`;
+        }
+
+        const fontPaletteContainer = document.getElementById('font-palette-content');
+        if (fontPaletteContainer && !fontPaletteContainer.innerHTML.trim()) {
+            fontPaletteContainer.innerHTML = `<div class="context-menu-section-title">Colores del Tema</div>${createFullPaletteHTML(themeColors, true)}<div class="context-menu-section-title">Colores Estándar</div>${createFullPaletteHTML(standardColors, false)}`;
+        }
+    }
+    
+    populateAllPalettes();
+
+    // --- MANEJO DE EVENTOS ---
+    contextMenu.querySelectorAll('.context-menu-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
-            document.querySelectorAll('.context-menu-tab, .context-menu-palette-content').forEach(el => el.classList.remove('active'));
-            e.target.classList.add('active');
+            contextMenu.querySelectorAll('.context-menu-tab, .context-menu-palette-content').forEach(el => el.classList.remove('active'));
             const targetContent = document.getElementById(e.target.dataset.target);
-            targetContent.classList.add('active');
-            activeProperty = e.target.dataset.target.startsWith('bg') ? 'backgroundColor' : 'color';
+            e.target.classList.add('active');
+            if (targetContent) targetContent.classList.add('active');
+            
+            activeProperty = (e.target.dataset.target === 'font-palette-content') ? 'color' : 'backgroundColor';
         });
     });
-
-    // Abrir el menú contextual
-    document.querySelectorAll('.lm-table .editable-cell').forEach(cell => {
+    
+    const allEditableCells = document.querySelectorAll('.editable-cell, .mobile-editable-cell');
+    allEditableCells.forEach(cell => {
         cell.addEventListener('contextmenu', e => {
             e.preventDefault();
-            activeCell = e.target;
-            contextMenu.style.top = `${e.pageY}px`;
-            contextMenu.style.left = `${e.pageX}px`;
+            
+            activeContainer = e.currentTarget;
+            activeCellElement = activeContainer.classList.contains('mobile-editable-cell') ? activeContainer.querySelector('p') : activeContainer;
+            
+            const { clientX, clientY } = (e.touches && e.touches[0]) ? e.touches[0] : e;
+            const menuWidth = contextMenu.offsetWidth;
+            const menuHeight = contextMenu.offsetHeight;
+            
+            let leftPosition = clientX + 5 > window.innerWidth - menuWidth ? clientX - menuWidth - 5 : clientX + 5;
+            let topPosition = clientY + 5 > window.innerHeight - menuHeight ? clientY - menuHeight - 5 : clientY + 5;
+            
+            contextMenu.style.left = `${leftPosition}px`;
+            contextMenu.style.top = `${topPosition}px`;
             contextMenu.style.display = 'block';
+
+            const boldCheckbox = document.getElementById('bold-checkbox');
+            if (boldCheckbox) boldCheckbox.checked = getComputedStyle(activeCellElement).fontWeight >= 700;
         });
     });
 
-    // Cerrar menú
     document.addEventListener('click', () => { if (contextMenu.style.display === 'block') contextMenu.style.display = 'none'; });
     contextMenu.addEventListener('click', e => e.stopPropagation());
 
-    // Listener unificado para todos los clics en colores
     contextMenu.addEventListener('click', (e) => {
-        if (e.target.classList.contains('color-box')) {
-            if (!activeCell) return;
-            const color = e.target.dataset.color;
-            activeCell.style[activeProperty] = color;
+        if (!activeCellElement) return;
+        const target = e.target;
+        
+        const colorBox = target.closest('.color-box');
+        if (colorBox) {
+            if (activeProperty === 'backgroundColor') {
+                activeContainer.style.backgroundColor = colorBox.dataset.color;
+            } else {
+                activeCellElement.style.color = colorBox.dataset.color;
+            }
             saveCurrentStyles();
-            contextMenu.style.display = 'none';
+        } else if (target.closest('#format-bold')) {
+            const checkbox = document.getElementById('bold-checkbox');
+            if (e.target !== checkbox) checkbox.checked = !checkbox.checked;
+            activeCellElement.style.fontWeight = checkbox.checked ? 'bold' : '';
+            saveCurrentStyles();
+        } else if (target.closest('#reset-style-btn')) {
+            activeContainer.style.backgroundColor = '';
+            activeCellElement.style.color = '';
+            activeCellElement.style.fontWeight = '';
+            saveCurrentStyles();
         }
     });
-    
-    // Lógica para el botón "Más Colores"
-    document.getElementById('more-colors-btn').addEventListener('click', () => {
-        nativeColorPicker.click();
-    });
 
-    // --- CORRECCIÓN CLAVE AQUÍ ---
-    // Cambiamos 'input' por 'change' para que solo se guarde al finalizar la selección.
-    nativeColorPicker.addEventListener('change', () => {
-        if (!activeCell) return;
-        activeCell.style[activeProperty] = nativeColorPicker.value;
-        saveCurrentStyles();
-    });
-
-    // Lógica para el botón de resetear estilos
-    document.getElementById('reset-style-btn').addEventListener('click', () => {
-        if (!activeCell) return;
-        activeCell.style.backgroundColor = '';
-        activeCell.style.color = '';
-        saveCurrentStyles();
-        contextMenu.style.display = 'none';
-    });
-
-    // Función auxiliar para guardar los estilos de la celda activa
     function saveCurrentStyles() {
-        if (!activeCell) return;
-        saveCellData(updateUrl, csrfToken, activeCell.dataset.ordenId, activeCell.dataset.columnaId, {
+        if (!activeContainer) return;
+        saveCellData(url, token, activeContainer, {
             estilos_css: {
-                backgroundColor: activeCell.style.backgroundColor,
-                color: activeCell.style.color
+                backgroundColor: activeContainer.style.backgroundColor,
+                color: activeCellElement.style.color,
+                fontWeight: activeCellElement.style.fontWeight,
             }
         });
     }
 }
 
 /**
- * Activa o desactiva el modo de reordenamiento de columnas.
+ * Inicializa los controles de administrador (Reordenar columnas).
  */
-function toggleReorderMode(button, reorderUrl, csrfToken) {
-    const tableHeaderRow = document.getElementById('lm-table-header-row');
-    const headers = tableHeaderRow.querySelectorAll('th[data-columna-id]');
+function initializeAdminControls(reorderUrl, token) {
+    const reorderBtn = document.getElementById('reorderBtn');
+    const headerRow = document.getElementById('lm-table-header-row');
+    if (!reorderBtn || !headerRow) return;
+    
+    let sortableInstance = null;
+    reorderBtn.addEventListener('click', function() {
+        if (sortableInstance) {
+            const orderedIds = sortableInstance.toArray();
+            fetch(reorderUrl, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ordered_ids: orderedIds.filter(id => id), csrf_token: token })
+            })
+            .then(res => res.ok ? res.json() : Promise.reject(new Error('Error en la respuesta del servidor.')))
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('¡Orden guardado! La página se recargará.');
+                    window.location.reload();
+                } else { throw new Error(data.message); }
+            })
+            .catch(error => alert('Error al guardar: ' + error.message));
 
-    if (sortableInstance) {
-        const orderedIds = sortableInstance.toArray();
-        fetch(reorderUrl, {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ ordered_ids: orderedIds, csrf_token: csrfToken })
-        }).then(res => res.json()).then(data => {
-            if (data.status === 'success') {
-                alert('¡Orden guardado! La página se recargará.');
-                window.location.reload();
-            } else { alert('Error al guardar: ' + data.message); }
-        });
-        sortableInstance.destroy(); sortableInstance = null;
-        headers.forEach(th => th.classList.remove('sortable-handle'));
-        button.innerHTML = '<i class="fas fa-sort mr-1"></i> Ordenar Columnas';
-        button.classList.remove('btn-success');
-    } else {
-        sortableInstance = new Sortable(tableHeaderRow, {
-            animation: 150, ghostClass: 'sortable-ghost', draggable: 'th[data-columna-id]',
-        });
-        headers.forEach(th => th.classList.add('sortable-handle'));
-        button.innerHTML = '<i class="fas fa-save mr-1"></i> Guardar Orden';
-        button.classList.add('btn-success');
-    }
-}
-
-/**
- * Función genérica para guardar datos de la celda (valor y/o estilos).
- */
-function saveCellData(url, token, ordenId, columnaId, payload) {
-    payload.csrf_token = token; payload.orden_id = ordenId; payload.columna_id = columnaId;
-    fetch(url, {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    })
-    .then(response => {
-        if (!response.ok) return response.json().then(err => Promise.reject(err));
-        return response.json();
-    })
-    .then(data => console.log('Guardado exitoso:', data.message))
-    .catch(error => {
-        console.error('Error al guardar:', error);
-        alert(`Error al guardar: ${error.message || 'Error de red'}`);
+            sortableInstance.destroy(); 
+            sortableInstance = null;
+            headerRow.querySelectorAll('th.sortable-handle').forEach(th => th.classList.remove('sortable-handle'));
+            this.innerHTML = '<i class="fas fa-sort mr-1"></i> Ordenar';
+            this.classList.replace('btn-success', 'btn-info');
+        } else {
+            sortableInstance = new Sortable(headerRow, {
+                animation: 150, 
+                ghostClass: 'sortable-ghost',
+                filter: '.non-draggable',
+                dataIdAttr: 'data-col-id',
+            });
+            headerRow.querySelectorAll('th[data-col-id]:not(.non-draggable)').forEach(th => th.classList.add('sortable-handle'));
+            this.innerHTML = '<i class="fas fa-save mr-1"></i> Guardar Orden';
+            this.classList.replace('btn-info', 'btn-success');
+        }
     });
 }
