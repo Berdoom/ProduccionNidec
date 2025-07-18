@@ -71,7 +71,7 @@
                         <td>{{ area }}</td>
                         {% for turno_name in nombres_turnos %}
                             {% set turno_slug = turno_name | slug %}{% set turno_data = data.get(area, {}).get(turno_name, {}) %}
-                            <td><input type="number" name="pronostico_{{ area_slug }}_{{ turno_slug }}" value="{{ turno_data.get('pronostico', '') | e }}" min="0" class="form-control form-control-sm text-center pronostico-turno-input adaptive-font" oninput="onInputChanged(this)" {% if turno_data.get('pronostico') is not none and turno_data.get('pronostico')|string != '' and 'admin.access' not in permissions %}readonly{% endif %}></td>
+                            <td><input type="number" name="pronostico_{{ area_slug }}_{{ turno_slug }}" value="{{ turno_data.get('pronostico', '') | e }}" min="0" class="form-control form-control-sm text-center pronostico-turno-input adaptive-font" oninput="onInputChanged(this)" {% if turno_data.get('pronostico') and turno_data.get('pronostico')|int > 0 and 'admin.access' not in permissions %}readonly{% endif %}></td>
                             {% for hora in horas_turno[turno_name] %}
                             <td><input type="number" name="produccion_{{ area_slug }}_{{ hora }}" value="{{ turno_data.get(hora, '') | e }}" min="0" class="form-control form-control-sm text-center produccion-hora-input adaptive-font" oninput="onInputChanged(this)"></td>
                             {% endfor %}
@@ -120,7 +120,7 @@
                             <h6 class="turno-header-mobile">{{ turno_name }}</h6>
                             <div class="capture-row-mobile">
                                 <label for="mobile_pronostico_{{ area_slug }}_{{ turno_slug }}">Pronóstico:</label>
-                                <input type="number" id="mobile_pronostico_{{ area_slug }}_{{ turno_slug }}" name="pronostico_{{ area_slug }}_{{ turno_slug }}" value="{{ turno_data.get('pronostico', '') | e }}" class="form-control form-control-sm pronostico-turno-input adaptive-font" oninput="onInputChanged(this)" {% if turno_data.get('pronostico') is not none and 'admin.access' not in permissions %}readonly{% endif %}>
+                                <input type="number" id="mobile_pronostico_{{ area_slug }}_{{ turno_slug }}" name="pronostico_{{ area_slug }}_{{ turno_slug }}" value="{{ turno_data.get('pronostico', '') | e }}" class="form-control form-control-sm pronostico-turno-input adaptive-font" oninput="onInputChanged(this)" {% if turno_data.get('pronostico') and turno_data.get('pronostico')|int > 0 and 'admin.access' not in permissions %}readonly{% endif %}>
                             </div>
                             {% for hora in horas_turno[turno_name] %}
                             <div class="capture-row-mobile">
